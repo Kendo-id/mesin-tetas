@@ -1,0 +1,32 @@
+const colors = {
+  light: {
+    text: "#E6EDF3",
+    tint: "#FF6B35",
+    background: "#0D1117",
+    foreground: "#E6EDF3",
+    card: "#161B22",
+    cardForeground: "#E6EDF3",
+    primary: "#FF6B35",
+    primaryForeground: "#FFFFFF",
+    secondary: "#2D9CDB",
+    secondaryForeground: "#FFFFFF",
+    muted: "#21262D",
+    mutedForeground: "#7D8590",
+    accent: "#3DD68C",
+    accentForeground: "#0D1117",
+    destructive: "#F85149",
+    destructiveForeground: "#FFFFFF",
+    border: "#21262D",
+    input: "#21262D",
+    warning: "#F0883E",
+    warningForeground: "#FFFFFF",
+    temperatureColor: "#FF6B35",
+    humidityColor: "#2D9CDB",
+    fanColor: "#3DD68C",
+    heaterColor: "#FF4500",
+    surface: "#1C2128",
+  },
+  radius: 12,
+};
+
+export default colors;
