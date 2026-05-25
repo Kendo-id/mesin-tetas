@@ -39,7 +39,18 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           eas build --platform android --profile preview --local \
-            --non-interactive --output ./TerraBreed.apk
+            --non-interactive --output ./TerraBreed.apk 2>&1 | tee eas-build.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "Exit code: $EXIT_CODE"
+          exit $EXIT_CODE
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eas-build-log
+          path: eas-build.log
+          retention-days: 3
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
