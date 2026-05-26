@@ -22,8 +22,7 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ],
-      "networkSecurityConfig": "./network-security-config.xml"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -31,9 +30,7 @@
     "plugins": [
       [
         "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
+        {}
       ],
       "expo-font",
       "expo-web-browser",
@@ -50,7 +47,17 @@
           "color": "#FF6B35",
           "sounds": []
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": false,
+            "networkInspector": false
+          }
+        }
+      ],
+      "./plugins/withNetworkSecurity"
     ],
     "experiments": {
       "typedRoutes": true,
