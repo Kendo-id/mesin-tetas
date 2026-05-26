@@ -26,6 +26,14 @@ interface HistoryRow {
   target_humid: number;
 }
 
+interface AlarmRow {
+  id: number;
+  ts: number;
+  type: string;
+  message: string;
+  value?: number;
+}
+
 const { width: SCREEN_W } = Dimensions.get("window");
 const CHART_W = SCREEN_W - 48;
 const CHART_H = 140;
@@ -39,6 +47,7 @@ function MiniChart({
   min,
   max,
   unit,
+  colors,
 }: {
   data: HistoryRow[];
   valueKey: keyof HistoryRow;
@@ -47,10 +56,8 @@ function MiniChart({
   min: number;
   max: number;
   unit: string;
+  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
 }) {
-  const colors = useColors();
-  const { serverUrl } = useIncubator();
-  const API = buildApi(serverUrl);
   if (data.length < 2) return null;
 
   const w = CHART_W - PAD.left - PAD.right;
@@ -76,7 +83,6 @@ function MiniChart({
 
   return (
     <Svg width={CHART_W} height={CHART_H}>
-      {/* Grid lines */}
       {yLabels.map((v) => (
         <Line
           key={v}
@@ -89,17 +95,13 @@ function MiniChart({
           strokeDasharray="4,4"
         />
       ))}
-      {/* Y labels */}
       {yLabels.map((v) => (
         <SvgText key={v} x={PAD.left - 4} y={normalize(v) + 4} fontSize={9} fill={colors.mutedForeground} textAnchor="end">
           {v}{unit}
         </SvgText>
       ))}
-      {/* Area fill */}
       <Path d={area} fill={color + "22"} />
-      {/* Line */}
       <Path d={d} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Target line */}
       {targetY !== null && (
         <Line
           x1={PAD.left}
@@ -111,7 +113,6 @@ function MiniChart({
           strokeDasharray="6,4"
         />
       )}
-      {/* Latest dot */}
       <Circle
         cx={points[points.length - 1].x}
         cy={points[points.length - 1].y}
@@ -122,6 +123,20 @@ function MiniChart({
   );
 }
 
+function formatAlarmTime(ts: number): string {
+  const d = new Date(ts * 1000);
+  return d.toLocaleString("id-ID", {
+    day: "2-digit", month: "short",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function alarmTypeColor(type: string, colors: ReturnType<typeof import("@/hooks/useColors").useColors>) {
+  if (type?.includes("high") || type?.includes("over")) return colors.destructive;
+  if (type?.includes("low")) return colors.warning;
+  return colors.secondary;
+}
+
 export default function HistoryScreen() {
   const colors = useColors();
   const { serverUrl } = useIncubator();
@@ -129,6 +144,7 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [alarms, setAlarms] = useState<AlarmRow[]>([]);
   const [period, setPeriod] = useState(60);
   const [loading, setLoading] = useState(true);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -137,18 +153,24 @@ export default function HistoryScreen() {
     const load = async () => {
       setLoading(true);
       try {
-        const [histRes, statsRes] = await Promise.all([
+        const [histRes, statsRes, alarmsRes] = await Promise.all([
           fetch(API.sensorHistory(period)),
           fetch(API.sensorStats),
+          fetch(API.alarms(20)),
         ]);
-        const [h, s] = await Promise.all([histRes.json(), statsRes.json()]);
+        const [h, s, a] = await Promise.all([
+          histRes.json(),
+          statsRes.json(),
+          alarmsRes.json(),
+        ]);
         setHistory(Array.isArray(h) ? h : []);
         setStats(s || {});
+        setAlarms(Array.isArray(a) ? a : []);
       } catch {}
       setLoading(false);
     };
     load();
-  }, [period]);
+  }, [period, serverUrl]);
 
   const fmt = (v?: number) => (v !== undefined && v !== null ? Number(v).toFixed(1) : "--");
 
@@ -211,7 +233,16 @@ export default function HistoryScreen() {
               <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Memuat...</Text>
             </View>
           ) : history.length > 1 ? (
-            <MiniChart data={history} valueKey="temp" targetKey="target_temp" color={colors.temperatureColor} min={34} max={42} unit="°" />
+            <MiniChart
+              data={history}
+              valueKey="temp"
+              targetKey="target_temp"
+              color={colors.temperatureColor}
+              min={34}
+              max={42}
+              unit="°"
+              colors={colors}
+            />
           ) : (
             <View style={styles.chartPlaceholder}>
               <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Belum ada data</Text>
@@ -241,7 +272,16 @@ export default function HistoryScreen() {
               <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Memuat...</Text>
             </View>
           ) : history.length > 1 ? (
-            <MiniChart data={history} valueKey="humidity" targetKey="target_humid" color={colors.humidityColor} min={30} max={90} unit="%" />
+            <MiniChart
+              data={history}
+              valueKey="humidity"
+              targetKey="target_humid"
+              color={colors.humidityColor}
+              min={30}
+              max={90}
+              unit="%"
+              colors={colors}
+            />
           ) : (
             <View style={styles.chartPlaceholder}>
               <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Belum ada data</Text>
@@ -252,6 +292,46 @@ export default function HistoryScreen() {
         <Text style={[styles.dataPoints, { color: colors.mutedForeground }]}>
           {history.length} data point · 24 jam terakhir: {stats.data_points || 0} log
         </Text>
+
+        {/* Alarm History */}
+        <View style={styles.alarmHeader}>
+          <Feather name="bell" size={15} color={colors.warning} />
+          <Text style={[styles.alarmTitle, { color: colors.foreground }]}>Riwayat Alarm</Text>
+          <View style={[styles.alarmBadge, { backgroundColor: colors.warning + "22" }]}>
+            <Text style={[styles.alarmBadgeText, { color: colors.warning }]}>{alarms.length}</Text>
+          </View>
+        </View>
+
+        {alarms.length === 0 ? (
+          <View style={[styles.alarmEmpty, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="check-circle" size={24} color={colors.accent} />
+            <Text style={[styles.alarmEmptyText, { color: colors.mutedForeground }]}>
+              Tidak ada alarm dalam periode ini
+            </Text>
+          </View>
+        ) : (
+          alarms.map((alarm) => (
+            <View
+              key={alarm.id}
+              style={[styles.alarmRow, {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderLeftColor: alarmTypeColor(alarm.type, colors),
+              }]}
+            >
+              <View style={[styles.alarmDot, { backgroundColor: alarmTypeColor(alarm.type, colors) }]} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[styles.alarmMessage, { color: colors.foreground }]} numberOfLines={2}>
+                  {alarm.message}
+                </Text>
+                <Text style={[styles.alarmTime, { color: colors.mutedForeground }]}>
+                  {formatAlarmTime(alarm.ts)}
+                  {alarm.value !== undefined ? ` · ${alarm.value.toFixed(1)}` : ""}
+                </Text>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -282,4 +362,22 @@ const styles = StyleSheet.create({
   legendLine: { width: 16, height: 2, borderRadius: 1 },
   legendText: { fontSize: 11, fontFamily: "Inter_400Regular", marginRight: 8 },
   dataPoints: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center" },
+  alarmHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+  alarmTitle: { flex: 1, fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  alarmBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  alarmBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  alarmEmpty: { borderRadius: 14, borderWidth: 1, padding: 20, alignItems: "center", gap: 8 },
+  alarmEmptyText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  alarmRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  alarmDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
+  alarmMessage: { fontSize: 13, fontFamily: "Inter_500Medium", lineHeight: 18 },
+  alarmTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
 });
