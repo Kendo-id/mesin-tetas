@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { API } from "@/constants/api";
+import { buildApi, DEFAULT_BASE_URL, SERVER_URL_KEY } from "@/constants/api";
 
 export interface SensorData {
   temp: number;
@@ -43,25 +43,14 @@ export interface IncubationSession {
 }
 
 const DEFAULT_SENSOR: SensorData = {
-  temp: 0,
-  temp_ds1: 0,
-  temp_ds2: 0,
-  temp_sht: 0,
-  humidity: 0,
-  target_temp: 37.5,
-  target_humid: 60,
+  temp: 0, temp_ds1: 0, temp_ds2: 0, temp_sht: 0,
+  humidity: 0, target_temp: 37.5, target_humid: 60,
 };
 
 const DEFAULT_STATUS: DeviceStatus = {
-  heater: false,
-  humidifier: false,
-  fan: false,
-  auto_mode: true,
-  tray_tilted: false,
-  tray_position: "center",
-  motor_state: "stop",
-  turn_interval_min: 120,
-  turn_duration_sec: 8,
+  heater: false, humidifier: false, fan: false, auto_mode: true,
+  tray_tilted: false, tray_position: "center", motor_state: "stop",
+  turn_interval_min: 120, turn_duration_sec: 8,
 };
 
 interface IncubatorContextType {
@@ -71,8 +60,10 @@ interface IncubatorContextType {
   isConnected: boolean;
   isLoading: boolean;
   lastUpdated: Date | null;
+  serverUrl: string;
   sendCommand: (command: string, value: unknown) => Promise<boolean>;
   refreshNow: () => void;
+  updateServerUrl: (url: string) => Promise<void>;
 }
 
 const IncubatorContext = createContext<IncubatorContextType | null>(null);
@@ -84,19 +75,29 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [serverUrl, setServerUrl] = useState(DEFAULT_BASE_URL);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const apiRef = useRef(buildApi(DEFAULT_BASE_URL));
+
+  // Load server URL dari AsyncStorage saat start
+  useEffect(() => {
+    AsyncStorage.getItem(SERVER_URL_KEY).then((saved) => {
+      if (saved) {
+        setServerUrl(saved);
+        apiRef.current = buildApi(saved);
+      }
+    });
+  }, []);
 
   const fetchSensorData = useCallback(async () => {
     try {
-      const res = await fetch(API.sensorLatest, { signal: AbortSignal.timeout(10000) });
+      const res = await fetch(apiRef.current.sensorLatest, {
+        signal: AbortSignal.timeout(10000),
+      });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      if (data.sensor && Object.keys(data.sensor).length > 0) {
-        setSensor((prev) => ({ ...prev, ...data.sensor }));
-      }
-      if (data.status && Object.keys(data.status).length > 0) {
-        setStatus((prev) => ({ ...prev, ...data.status }));
-      }
+      if (data.sensor) setSensor((prev) => ({ ...prev, ...data.sensor }));
+      if (data.status) setStatus((prev) => ({ ...prev, ...data.status }));
       setIsConnected(true);
       setLastUpdated(new Date());
     } catch {
@@ -108,7 +109,9 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const fetchIncubation = useCallback(async () => {
     try {
-      const res = await fetch(API.incubationCurrent, { signal: AbortSignal.timeout(10000) });
+      const res = await fetch(apiRef.current.incubationCurrent, {
+        signal: AbortSignal.timeout(10000),
+      });
       if (!res.ok) return;
       const data = await res.json();
       setIncubation(data);
@@ -116,11 +119,10 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
     fetchSensorData();
     fetchIncubation();
-    pollRef.current = setInterval(() => {
-      fetchSensorData();
-    }, 3000);
+    pollRef.current = setInterval(fetchSensorData, 3000);
   }, [fetchSensorData, fetchIncubation]);
 
   useEffect(() => {
@@ -134,11 +136,11 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const sendCommand = useCallback(async (command: string, value: unknown): Promise<boolean> => {
     try {
-      const res = await fetch(API.command, {
+      const res = await fetch(apiRef.current.command, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command, value }),
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) return false;
       const data = await res.json();
@@ -154,9 +156,22 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
     fetchIncubation();
   }, [fetchSensorData, fetchIncubation]);
 
+  // Ganti URL server tanpa rebuild
+  const updateServerUrl = useCallback(async (url: string) => {
+    const clean = url.replace(/\/$/, "");
+    await AsyncStorage.setItem(SERVER_URL_KEY, clean);
+    setServerUrl(clean);
+    apiRef.current = buildApi(clean);
+    // Restart polling dengan URL baru
+    startPolling();
+  }, [startPolling]);
+
   return (
     <IncubatorContext.Provider
-      value={{ sensor, status, incubation, isConnected, isLoading, lastUpdated, sendCommand, refreshNow }}
+      value={{
+        sensor, status, incubation, isConnected, isLoading,
+        lastUpdated, serverUrl, sendCommand, refreshNow, updateServerUrl,
+      }}
     >
       {children}
     </IncubatorContext.Provider>

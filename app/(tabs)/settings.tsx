@@ -41,7 +41,7 @@ const SPECIES_PRESETS: Record<SpeciesKey, { temp: number; humid: number; days: n
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { sensor, status, incubation, sendCommand, refreshNow } = useIncubator();
+  const { sensor, status, incubation, sendCommand, refreshNow, serverUrl, updateServerUrl } = useIncubator();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const [targetTemp, setTargetTemp] = useState(String(sensor.target_temp));
@@ -50,6 +50,27 @@ export default function SettingsScreen() {
   const [turnDuration, setTurnDuration] = useState(String(status.turn_duration_sec));
   const [widgetEnabled, setWidgetEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [serverUrlInput, setServerUrlInput] = useState("");
+  const [savingUrl, setSavingUrl] = useState(false);
+
+  // Load server URL ke input saat pertama render
+  useEffect(() => {
+    setServerUrlInput(serverUrl);
+  }, [serverUrl]);
+
+  const saveServerUrl = async () => {
+    if (!serverUrlInput.trim()) return;
+    setSavingUrl(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await updateServerUrl(serverUrlInput.trim());
+      Alert.alert("Berhasil", "URL server disimpan. Menghubungkan...");
+    } catch {
+      Alert.alert("Error", "Gagal menyimpan URL server.");
+    } finally {
+      setSavingUrl(false);
+    }
+  };
 
   // Incubation form
   const [species, setSpecies] = useState<SpeciesKey>("ayam");
@@ -311,7 +332,37 @@ export default function SettingsScreen() {
         )}
 
         {/* ESP32 Settings */}
+        {/* Koneksi Server */}
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>KONEKSI SERVER</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.fieldLabel, { color: colors.foreground }]}>URL Server</Text>
+          <TextInput
+            style={[styles.textInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+            value={serverUrlInput}
+            onChangeText={setServerUrlInput}
+            placeholder="https://192.168.1.x/terrabreed"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginBottom: 10, lineHeight: 16 }}>
+            Contoh IP lokal: https://192.168.1.100/terrabreed{'\n'}
+            Atau: http://192.168.1.100:5000/terrabreed
+          </Text>
+          <Pressable
+            style={{ backgroundColor: colors.primary, borderRadius: 10, padding: 12, alignItems: "center", opacity: savingUrl ? 0.6 : 1 }}
+            onPress={saveServerUrl}
+            disabled={savingUrl}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
+              {savingUrl ? "Menyimpan..." : "Simpan & Hubungkan"}
+            </Text>
+          </Pressable>
+        </View>
+
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PENGATURAN ESP32</Text>
+
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <NumberInput label="Target Suhu" value={targetTemp} onChangeText={setTargetTemp} unit="°C" />
           <NumberInput label="Target Kelembaban" value={targetHumid} onChangeText={setTargetHumid} unit="%" />
@@ -369,6 +420,14 @@ const styles = StyleSheet.create({
   sessionDetail: { fontSize: 13, fontFamily: "Inter_400Regular" },
   finishBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
   finishBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    marginBottom: 8,
+    fontFamily: "Inter_400Regular",
+  },
   fieldLabel: { fontSize: 11, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
   speciesChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   speciesChipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },

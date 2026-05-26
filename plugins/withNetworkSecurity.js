@@ -2,11 +2,7 @@ const { withAndroidManifest, withDangerousMod } = require("@expo/config-plugins"
 const fs = require("fs");
 const path = require("path");
 
-// Plugin ini inject network_security_config.xml ke dalam android res/xml
-// agar HTTPS ke kendo-assistant.com dengan self-signed cert bisa connect
-
 const withNetworkSecurity = (config) => {
-  // Step 1: tambah android:networkSecurityConfig ke AndroidManifest
   config = withAndroidManifest(config, (config) => {
     const manifest = config.modResults.manifest;
     if (manifest.$) {
@@ -15,7 +11,6 @@ const withNetworkSecurity = (config) => {
     return config;
   });
 
-  // Step 2: buat file network_security_config.xml di res/xml
   config = withDangerousMod(config, [
     "android",
     async (config) => {
@@ -25,6 +20,7 @@ const withNetworkSecurity = (config) => {
       );
       if (!fs.existsSync(xmlDir)) fs.mkdirSync(xmlDir, { recursive: true });
 
+      // Trust semua cert (termasuk self-signed) untuk kendo-assistant.com
       const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <domain-config cleartextTrafficPermitted="false">
@@ -34,6 +30,12 @@ const withNetworkSecurity = (config) => {
             <certificates src="user" />
         </trust-anchors>
     </domain-config>
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
