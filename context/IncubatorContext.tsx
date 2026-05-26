@@ -88,7 +88,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const fetchSensorData = useCallback(async () => {
     try {
-      const res = await fetch(API.sensorLatest, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(API.sensorLatest, { signal: AbortSignal.timeout(10000) });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (data.sensor && Object.keys(data.sensor).length > 0) {
@@ -108,7 +108,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const fetchIncubation = useCallback(async () => {
     try {
-      const res = await fetch(API.incubationCurrent, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(API.incubationCurrent, { signal: AbortSignal.timeout(10000) });
       if (!res.ok) return;
       const data = await res.json();
       setIncubation(data);
