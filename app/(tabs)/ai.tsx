@@ -17,7 +17,9 @@ import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 
 import { useColors } from "@/hooks/useColors";
-import { API } from "@/constants/api";
+import { useIncubator } from "@/context/IncubatorContext";
+import { buildApi } from "@/constants/api";
+import * as FileSystem from "expo-file-system";
 
 interface Message {
   id: string;
@@ -31,6 +33,8 @@ type VoiceState = "idle" | "recording" | "processing" | "playing";
 export default function AIScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { serverUrl } = useIncubator();
+  const API = buildApi(serverUrl);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -78,23 +82,36 @@ export default function AIScreen() {
   const playTTS = async (text: string) => {
     try {
       setVoiceState("playing");
-      const res = await fetch(API.tts, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: "id-ID-GadisNeural" }),
+      // Simpan audio ke file sementara — URL.createObjectURL tidak support di React Native
+      const localUri = FileSystem.cacheDirectory + "tts_" + Date.now() + ".mp3";
+      const downloadRes = await FileSystem.downloadAsync(
+        API.tts,
+        localUri,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice: "id-ID-GadisNeural" }),
+        }
+      );
+      if (downloadRes.status !== 200) throw new Error("TTS failed: " + downloadRes.status);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
-      if (!res.ok) throw new Error("TTS failed");
-      const blob = await res.blob();
-      const uri = URL.createObjectURL(blob);
-      const { sound } = await Audio.Sound.createAsync({ uri });
+      const { sound } = await Audio.Sound.createAsync({ uri: downloadRes.uri });
       soundRef.current = sound;
       await sound.playAsync();
       sound.setOnPlaybackStatusUpdate((s) => {
         if (s.isLoaded && s.didJustFinish) {
           setVoiceState("idle");
+          // Hapus file temp setelah selesai
+          FileSystem.deleteAsync(downloadRes.uri, { idempotent: true });
         }
       });
-    } catch {
+    } catch (e) {
+      console.error("TTS error:", e);
       setVoiceState("idle");
     }
   };

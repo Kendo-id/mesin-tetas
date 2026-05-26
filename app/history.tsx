@@ -14,7 +14,8 @@ import Svg, { Path, Circle, Line, Text as SvgText } from "react-native-svg";
 import { router } from "expo-router";
 
 import { useColors } from "@/hooks/useColors";
-import { API } from "@/constants/api";
+import { buildApi } from "@/constants/api";
+import { useIncubator } from "@/context/IncubatorContext";
 
 interface HistoryRow {
   ts: number;
@@ -48,6 +49,8 @@ function MiniChart({
   unit: string;
 }) {
   const colors = useColors();
+  const { serverUrl } = useIncubator();
+  const API = buildApi(serverUrl);
   if (data.length < 2) return null;
 
   const w = CHART_W - PAD.left - PAD.right;
@@ -121,6 +124,8 @@ function MiniChart({
 
 export default function HistoryScreen() {
   const colors = useColors();
+  const { serverUrl } = useIncubator();
+  const API = buildApi(serverUrl);
   const insets = useSafeAreaInsets();
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
