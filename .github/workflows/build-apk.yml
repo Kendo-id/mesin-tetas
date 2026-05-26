@@ -41,7 +41,8 @@ jobs:
           eas build --platform android --profile preview --local \
             --non-interactive --output ./TerraBreed.apk 2>&1 | tee eas-build.log
           EXIT_CODE=${PIPESTATUS[0]}
-          echo "Exit code: $EXIT_CODE"
+          echo "=== Cari APK ==="
+          find . -name "*.apk" 2>/dev/null
           exit $EXIT_CODE
 
       - name: Upload log on failure
@@ -56,5 +57,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TerraBreed-APK
-          path: TerraBreed.apk
+          path: |
+            TerraBreed.apk
+            **/*.apk
+          if-no-files-found: warn
           retention-days: 30
