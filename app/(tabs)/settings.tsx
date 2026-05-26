@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,7 +18,7 @@ import * as Notifications from "expo-notifications";
 
 import { useColors } from "@/hooks/useColors";
 import { useIncubator } from "@/context/IncubatorContext";
-import { API } from "@/constants/api";
+import { buildApi } from "@/constants/api";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -42,6 +43,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { sensor, status, incubation, sendCommand, refreshNow, serverUrl, updateServerUrl } = useIncubator();
+  const API = buildApi(serverUrl);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const [targetTemp, setTargetTemp] = useState(String(sensor.target_temp));
@@ -53,7 +55,10 @@ export default function SettingsScreen() {
   const [serverUrlInput, setServerUrlInput] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
 
-  // Load server URL ke input saat pertama render
+  // Modal selesai inkubasi (cross-platform pengganti Alert.prompt)
+  const [finishModalVisible, setFinishModalVisible] = useState(false);
+  const [hatchedInput, setHatchedInput] = useState("0");
+
   useEffect(() => {
     setServerUrlInput(serverUrl);
   }, [serverUrl]);
@@ -72,7 +77,6 @@ export default function SettingsScreen() {
     }
   };
 
-  // Incubation form
   const [species, setSpecies] = useState<SpeciesKey>("ayam");
   const [totalEggs, setTotalEggs] = useState("100");
   const [sessionNotes, setSessionNotes] = useState("");
@@ -89,7 +93,7 @@ export default function SettingsScreen() {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await fetch(API.settings, {
+      const res = await fetch(API.settings, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,6 +103,7 @@ export default function SettingsScreen() {
           turn_duration: parseInt(turnDuration),
         }),
       });
+      if (!res.ok) throw new Error("HTTP " + res.status);
       refreshNow();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -136,26 +141,30 @@ export default function SettingsScreen() {
     }
   };
 
+  // Cross-platform: gunakan modal state, bukan Alert.prompt (iOS only)
   const finishIncubation = () => {
     if (!incubation.active) return;
-    Alert.prompt(
-      "Selesaikan Inkubasi",
-      "Berapa telur yang berhasil menetas?",
-      async (hatched) => {
-        if (!hatched) return;
-        try {
-          await fetch(API.incubationFinish, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: incubation.id, hatched: parseInt(hatched) || 0, infertile: 0 }),
-          });
-          refreshNow();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch {}
-      },
-      "plain-text",
-      "0"
-    );
+    setHatchedInput("0");
+    setFinishModalVisible(true);
+  };
+
+  const confirmFinishIncubation = async () => {
+    setFinishModalVisible(false);
+    try {
+      await fetch(API.incubationFinish, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: incubation.id,
+          hatched: parseInt(hatchedInput) || 0,
+          infertile: 0,
+        }),
+      });
+      refreshNow();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Error", "Gagal menyelesaikan sesi inkubasi.");
+    }
   };
 
   const toggleWidget = async (val: boolean) => {
@@ -201,6 +210,45 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Modal Selesaikan Inkubasi — cross-platform (Android + iOS) */}
+      <Modal
+        visible={finishModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFinishModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Selesaikan Inkubasi</Text>
+            <Text style={[styles.modalDesc, { color: colors.mutedForeground }]}>
+              Berapa telur yang berhasil menetas?
+            </Text>
+            <TextInput
+              value={hatchedInput}
+              onChangeText={setHatchedInput}
+              keyboardType="numeric"
+              style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+              autoFocus
+              selectTextOnFocus
+            />
+            <View style={styles.modalBtns}>
+              <Pressable
+                onPress={() => setFinishModalVisible(false)}
+                style={[styles.modalBtn, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.modalBtnText, { color: colors.mutedForeground }]}>Batal</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmFinishIncubation}
+                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+              >
+                <Text style={[styles.modalBtnText, { color: "#fff" }]}>Selesaikan</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>Pengaturan</Text>
       </View>
@@ -331,7 +379,6 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* ESP32 Settings */}
         {/* Koneksi Server */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>KONEKSI SERVER</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -443,4 +490,13 @@ const styles = StyleSheet.create({
   startBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
   saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 12, marginTop: 4 },
   saveBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
+  // Modal styles
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalBox: { width: "100%", maxWidth: 360, borderRadius: 20, borderWidth: 1, padding: 24, gap: 16 },
+  modalTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  modalDesc: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  modalInput: { borderRadius: 10, borderWidth: 1, padding: 12, fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center" },
+  modalBtns: { flexDirection: "row", gap: 10 },
+  modalBtn: { flex: 1, padding: 13, borderRadius: 12, alignItems: "center", borderWidth: 1 },
+  modalBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
