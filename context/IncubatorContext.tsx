@@ -42,6 +42,20 @@ export interface IncubationSession {
   notes?: string;
 }
 
+export interface ServerConfig {
+  mqtt_host: string;
+  mqtt_port: number;
+  device_id: string;
+  topics?: Record<string, string>;
+}
+
+export interface TestResult {
+  ok: boolean;
+  message: string;
+  latencyMs?: number;
+  url?: string;
+}
+
 const DEFAULT_SENSOR: SensorData = {
   temp: 0, temp_ds1: 0, temp_ds2: 0, temp_sht: 0,
   humidity: 0, target_temp: 37.5, target_humid: 60,
@@ -57,6 +71,7 @@ interface IncubatorContextType {
   sensor: SensorData;
   status: DeviceStatus;
   incubation: IncubationSession;
+  serverConfig: ServerConfig | null;
   isConnected: boolean;
   isLoading: boolean;
   lastUpdated: Date | null;
@@ -65,14 +80,15 @@ interface IncubatorContextType {
   sendCommand: (command: string, value: unknown) => Promise<boolean>;
   refreshNow: () => void;
   updateServerUrl: (url: string) => Promise<void>;
+  testConnection: (url?: string) => Promise<TestResult>;
 }
 
 const IncubatorContext = createContext<IncubatorContextType | null>(null);
 
 /**
- * fetchWithTimeout: ganti AbortSignal.timeout() yang tidak didukung di React Native / Hermes.
- * AbortSignal.timeout() hanya tersedia di Node.js 17.3+ dan browser modern,
- * bukan di Hermes engine — sehingga setiap fetch langsung throw TypeError.
+ * fetchWithTimeout: pengganti AbortSignal.timeout() yang TIDAK didukung
+ * di React Native Hermes engine. AbortSignal.timeout() hanya ada di Node.js 17.3+
+ * dan browser modern — di Hermes langsung throw TypeError sehingga semua fetch gagal.
  */
 function fetchWithTimeout(
   url: string,
@@ -90,6 +106,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const [sensor, setSensor] = useState<SensorData>(DEFAULT_SENSOR);
   const [status, setStatus] = useState<DeviceStatus>(DEFAULT_STATUS);
   const [incubation, setIncubation] = useState<IncubationSession>({ active: false });
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -98,7 +115,6 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const apiRef = useRef(buildApi(DEFAULT_BASE_URL));
 
-  // Load server URL dari AsyncStorage saat start
   useEffect(() => {
     AsyncStorage.getItem(SERVER_URL_KEY).then((saved) => {
       if (saved) {
@@ -111,7 +127,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const fetchSensorData = useCallback(async () => {
     try {
       const res = await fetchWithTimeout(apiRef.current.sensorLatest, {}, 8000);
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText || "Server error"}`);
       const data = await res.json();
       if (data.sensor) setSensor((prev) => ({ ...prev, ...data.sensor }));
       if (data.status) setStatus((prev) => ({ ...prev, ...data.status }));
@@ -120,8 +136,17 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
       setLastUpdated(new Date());
     } catch (e: unknown) {
       setIsConnected(false);
-      const msg = e instanceof Error ? e.message : String(e);
-      setLastError(msg);
+      const raw = e instanceof Error ? e.message : String(e);
+      // Buat pesan error yang lebih mudah dipahami
+      let friendly = raw;
+      if (raw.includes("aborted") || raw.includes("abort") || raw.includes("timeout")) {
+        friendly = "Timeout — server tidak merespons dalam 8 detik. Cek URL dan port.";
+      } else if (raw.includes("Network request failed") || raw.includes("Failed to fetch")) {
+        friendly = "Gagal terhubung jaringan — cek URL, IP lokal, dan port server Flask.";
+      } else if (raw.includes("ECONNREFUSED")) {
+        friendly = "Koneksi ditolak — pastikan Flask server sudah berjalan.";
+      }
+      setLastError(friendly);
     } finally {
       setIsLoading(false);
     }
@@ -136,12 +161,22 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  const fetchServerConfig = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout(apiRef.current.config, {}, 8000);
+      if (!res.ok) return;
+      const data: ServerConfig = await res.json();
+      setServerConfig(data);
+    } catch {}
+  }, []);
+
   const startPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     fetchSensorData();
     fetchIncubation();
+    fetchServerConfig();
     pollRef.current = setInterval(fetchSensorData, 3000);
-  }, [fetchSensorData, fetchIncubation]);
+  }, [fetchSensorData, fetchIncubation, fetchServerConfig]);
 
   useEffect(() => {
     startPolling();
@@ -175,21 +210,65 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const refreshNow = useCallback(() => {
     fetchSensorData();
     fetchIncubation();
-  }, [fetchSensorData, fetchIncubation]);
+    fetchServerConfig();
+  }, [fetchSensorData, fetchIncubation, fetchServerConfig]);
 
   const updateServerUrl = useCallback(async (url: string) => {
     const clean = url.replace(/\/$/, "");
     await AsyncStorage.setItem(SERVER_URL_KEY, clean);
     setServerUrl(clean);
+    setServerConfig(null);
+    setIsConnected(false);
+    setLastError(null);
     apiRef.current = buildApi(clean);
     startPolling();
   }, [startPolling]);
 
+  /**
+   * testConnection: tes koneksi ke URL tertentu (atau URL aktif).
+   * Mengembalikan hasil detail termasuk latensi dan pesan error.
+   */
+  const testConnection = useCallback(async (url?: string): Promise<TestResult> => {
+    const testBase = url ? url.replace(/\/$/, "") : serverUrl;
+    const testUrl = buildApi(testBase).sensorLatest;
+    const start = Date.now();
+    try {
+      const res = await fetchWithTimeout(testUrl, {}, 10000);
+      const latencyMs = Date.now() - start;
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: `Server merespons dengan error: HTTP ${res.status} ${res.statusText}`,
+          latencyMs,
+          url: testUrl,
+        };
+      }
+      await res.json();
+      return {
+        ok: true,
+        message: `Terhubung! Latensi: ${latencyMs}ms`,
+        latencyMs,
+        url: testUrl,
+      };
+    } catch (e: unknown) {
+      const latencyMs = Date.now() - start;
+      const raw = e instanceof Error ? e.message : String(e);
+      let message = raw;
+      if (raw.includes("aborted") || raw.includes("abort") || raw.includes("timeout")) {
+        message = `Timeout setelah ${latencyMs}ms — server tidak merespons.\nCek: apakah port sudah benar? Coba http://IP:5000/terrabreed`;
+      } else if (raw.includes("Network request failed") || raw.includes("Failed to fetch")) {
+        message = "Gagal koneksi jaringan.\nCek: IP lokal benar, Flask server berjalan, port tidak diblokir firewall.";
+      }
+      return { ok: false, message, latencyMs, url: testUrl };
+    }
+  }, [serverUrl]);
+
   return (
     <IncubatorContext.Provider
       value={{
-        sensor, status, incubation, isConnected, isLoading,
-        lastUpdated, lastError, serverUrl, sendCommand, refreshNow, updateServerUrl,
+        sensor, status, incubation, serverConfig,
+        isConnected, isLoading, lastUpdated, lastError,
+        serverUrl, sendCommand, refreshNow, updateServerUrl, testConnection,
       }}
     >
       {children}
