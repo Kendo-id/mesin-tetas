@@ -149,27 +149,57 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
     const playTTS = async (text: string, msgId?: string) => {
       await stopTTS();
+      const localUri = (FileSystem.cacheDirectory ?? "") + "tts_" + Date.now() + ".mp3";
       try {
         setVoiceState("playing");
         if (msgId) setSpeakingMsgId(msgId);
-        const localUri = FileSystem.cacheDirectory + "tts_" + Date.now() + ".mp3";
-        const dlRes = await FileSystem.downloadAsync(
-          apiRef.current.tts, localUri,
-          { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, voice: "id-ID-GadisNeural" }) }
-        );
-        if (dlRes.status !== 200) throw new Error("TTS " + dlRes.status);
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, shouldDuckAndroid: true, playThroughEarpieceAndroid: false });
-        const { sound } = await Audio.Sound.createAsync({ uri: dlRes.uri });
+
+        // FileSystem.downloadAsync tidak support body POST,
+        // jadi fetch dulu → ambil sebagai base64 → tulis ke file lokal
+        const res = await fetch(apiRef.current.tts, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice: "id-ID-GadisNeural" }),
+        });
+        if (!res.ok) throw new Error("TTS HTTP " + res.status);
+
+        // Konversi response binary ke base64
+        const arrayBuffer = await res.arrayBuffer();
+        const uint8 = new Uint8Array(arrayBuffer);
+        let binary = "";
+        for (let i = 0; i < uint8.byteLength; i++) {
+          binary += String.fromCharCode(uint8[i]);
+        }
+        const base64 = btoa(binary);
+
+        // Tulis ke file cache
+        await FileSystem.writeAsStringAsync(localUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync({ uri: localUri });
         soundRef.current = sound;
         await sound.playAsync();
         sound.setOnPlaybackStatusUpdate(s => {
           if (s.isLoaded && s.didJustFinish) {
-            setVoiceState("idle"); setSpeakingMsgId(null);
-            FileSystem.deleteAsync(dlRes.uri, { idempotent: true });
+            setVoiceState("idle");
+            setSpeakingMsgId(null);
+            FileSystem.deleteAsync(localUri, { idempotent: true });
           }
         });
-      } catch { setVoiceState("idle"); setSpeakingMsgId(null); }
+      } catch (e) {
+        console.error("TTS error:", e);
+        setVoiceState("idle");
+        setSpeakingMsgId(null);
+        FileSystem.deleteAsync(localUri, { idempotent: true }).catch(() => {});
+      }
     };
 
     const handleBubbleTTS = async (msg: Message) => {

@@ -1,71 +1,73 @@
-const { withMainApplication } = require("@expo/config-plugins");
+const { withDangerousMod } = require("@expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
 
-  /**
-   * Plugin ini patch MainApplication untuk bypass SSL verification.
-   * Mendukung Old Architecture (OkHttp) DAN New Architecture (HttpsURLConnection).
-   */
-  const withTrustAllCerts = (config) => {
-    config = withMainApplication(config, (config) => {
-      let contents = config.modResults.contents;
+const withTrustAllCerts = (config) => {
+  config = withDangerousMod(config, [
+    "android",
+    async (config) => {
+      const packageName = config.android?.package ?? "com.kendokenceng.terrabreed";
+      const packagePath = packageName.replace(/\./g, "/");
+      const srcDir = path.join(
+        config.modRequest.platformProjectRoot,
+        "app/src/main/java", packagePath
+      );
+      if (!fs.existsSync(srcDir)) fs.mkdirSync(srcDir, { recursive: true });
 
-      // Tambah import SSL + HttpsURLConnection
-      const sslImports = `import javax.net.ssl.*;
-  import java.security.cert.X509Certificate;
-  import okhttp3.OkHttpClient;
-  import com.facebook.react.modules.network.OkHttpClientProvider;
-  import com.facebook.react.modules.network.ReactCookieJarContainer;`;
+      // Kotlin OkHttp factory — trust semua cert untuk host lokal
+      fs.writeFileSync(path.join(srcDir, "SSLBypassOkHttpFactory.kt"), `package ${packageName}
 
-      if (!contents.includes("javax.net.ssl")) {
-        contents = contents.replace(
-          "import com.facebook.react.ReactApplication;",
-          `${sslImports}\nimport com.facebook.react.ReactApplication;`
-        );
-      }
+import com.facebook.react.modules.network.OkHttpClientFactory
+import com.facebook.react.modules.network.ReactCookieJarContainer
+import okhttp3.OkHttpClient
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.*
 
-      // Inject SSL bypass di onCreate – mendukung Old Arch (OkHttp) dan New Arch (HttpsURLConnection)
-      const onCreatePatch = `
-      // Bypass SSL untuk self-signed cert (Old Arch + New Arch)
-      try {
-        TrustManager[] trustManagers = new TrustManager[]{
-          new X509TrustManager() {
-            public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-            public void checkServerTrusted(X509Certificate[] chain, String authType) {}
-            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-          }
-        };
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(null, trustManagers, new java.security.SecureRandom());
-
-        // Old Architecture: patch OkHttp via ReactNative bridge
-        OkHttpClientProvider.setOkHttpClientFactory(() ->
-          new OkHttpClient.Builder()
-            .cookieJar(new ReactCookieJarContainer())
-            .sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustManagers[0])
-            .hostnameVerifier((hostname, session) -> true)
+class SSLBypassOkHttpFactory : OkHttpClientFactory {
+    override fun createNewNetworkModuleOkHttpClient(): OkHttpClient {
+        val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val ctx = SSLContext.getInstance("TLS").also { it.init(null, trustAll, SecureRandom()) }
+        return OkHttpClient.Builder()
+            .cookieJar(ReactCookieJarContainer())
+            .sslSocketFactory(ctx.socketFactory, trustAll[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
             .build()
-        );
+    }
+}
+`);
 
-        // New Architecture: patch HttpsURLConnection default factory
-        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
-        HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
-
-      } catch (Exception e) {
-        e.printStackTrace();
-      }`;
-
-      if (!contents.includes("TrustManager[]") && contents.includes("super.onCreate()")) {
-        contents = contents.replace(
-          "super.onCreate();",
-          `super.onCreate();\n${onCreatePatch}`
-        );
+      // Patch MainApplication.kt
+      const mainAppPath = path.join(srcDir, "MainApplication.kt");
+      if (fs.existsSync(mainAppPath)) {
+        let src = fs.readFileSync(mainAppPath, "utf8");
+        const importLine = "import com.facebook.react.modules.network.OkHttpClientProvider";
+        if (!src.includes(importLine)) {
+          src = src.replace(
+            "import com.facebook.react.ReactApplication",
+            `${importLine}\nimport com.facebook.react.ReactApplication`
+          );
+        }
+        if (!src.includes("SSLBypassOkHttpFactory")) {
+          src = src.replace(
+            "super.onCreate()",
+            `super.onCreate()\n        OkHttpClientProvider.setOkHttpClientFactory(SSLBypassOkHttpFactory())`
+          );
+        }
+        fs.writeFileSync(mainAppPath, src);
+        console.log("[withTrustAllCerts] MainApplication.kt patched ✅");
+      } else {
+        console.warn("[withTrustAllCerts] MainApplication.kt not found, will retry at prebuild");
       }
-
-      config.modResults.contents = contents;
       return config;
-    });
+    },
+  ]);
 
-    return config;
-  };
+  return config;
+};
 
-  module.exports = withTrustAllCerts;
-  
+module.exports = withTrustAllCerts;
