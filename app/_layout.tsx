@@ -8,11 +8,10 @@ import {
   import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
   import { Stack } from "expo-router";
   import * as SplashScreen from "expo-splash-screen";
-  import * as TaskManager from "expo-task-manager";
   import React, { useEffect } from "react";
   import { GestureHandlerRootView } from "react-native-gesture-handler";
   import { KeyboardProvider } from "react-native-keyboard-controller";
-  import { WIDGET_TASK_NAME } from "react-native-android-widget";
+  import { registerWidgetTaskHandler } from "react-native-android-widget";
   import { SafeAreaProvider } from "react-native-safe-area-context";
 
   import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -21,8 +20,8 @@ import {
 
   SplashScreen.preventAutoHideAsync();
 
-  // Register widget task at module level (required by expo-task-manager)
-  TaskManager.defineTask(WIDGET_TASK_NAME, widgetTaskHandler);
+  // Register widget task handler at module level (runs as Android headless task)
+  registerWidgetTaskHandler(widgetTaskHandler);
 
   const queryClient = new QueryClient();
 
