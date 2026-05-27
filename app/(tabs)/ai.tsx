@@ -46,6 +46,10 @@ export default function AIScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+    // Tab bar height — sama dengan kalkulasi di _layout.tsx
+    const tabBarH = Platform.OS === "ios"
+      ? 49 + insets.bottom
+      : 50 + Math.max(insets.bottom + 12, 40);
 
   useEffect(() => {
     // Animate pulse when recording
@@ -285,7 +289,7 @@ export default function AIScreen() {
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.chatList, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.chatList, { paddingBottom: 16 }]}
       >
         {messages.length === 0 && (
           <View style={styles.emptyState}>
