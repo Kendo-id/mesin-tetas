@@ -32,19 +32,16 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
   }
 
   type VoiceState = "idle" | "recording" | "processing" | "playing";
+  type Feedback = "up" | "down";
 
   function formatTime(ts: number): string {
     const d = new Date(ts);
-    return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
   function formatDateTime(ts: number): string {
     const d = new Date(ts);
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mo = String(d.getMonth() + 1).padStart(2, "0");
-    return `${dd}/${mo} ${hh}:${mm}`;
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
   }
 
   export default function AIScreen() {
@@ -60,12 +57,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     const [isCallMode, setIsCallMode] = useState(false);
     const [callTranscript, setCallTranscript] = useState("");
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-    // TTS auto-play toggle (tombol speaker di input bar)
     const [ttsEnabled, setTtsEnabled] = useState(false);
-    // Track pesan yang sedang diputar TTS
     const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
-    // Track pesan yang baru dicopy
     const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+    const [feedbackMap, setFeedbackMap] = useState<Record<string, Feedback>>({});
 
     const recordingRef = useRef<Audio.Recording | null>(null);
     const soundRef    = useRef<Audio.Sound | null>(null);
@@ -78,7 +73,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       ? 49 + insets.bottom
       : 50 + Math.max(insets.bottom + 12, 40);
 
-    // ─── Load chat history ──────────────────────────────────────────
     const loadHistory = useCallback(async () => {
       setIsLoadingHistory(true);
       try {
@@ -101,7 +95,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
     useEffect(() => { loadHistory(); }, [loadHistory]);
 
-    // ─── Hapus riwayat ─────────────────────────────────────────────
     const deleteHistory = () => {
       Alert.alert("Hapus Riwayat Chat", "Semua percakapan akan dihapus permanen. Lanjutkan?", [
         { text: "Batal", style: "cancel" },
@@ -112,30 +105,27 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
               const res = await fetch(apiRef.current.chatClear, { method: "POST" });
               if (!res.ok) throw new Error();
               setMessages([]);
+              setFeedbackMap({});
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } catch {
-              Alert.alert("Gagal", "Tidak dapat menghapus riwayat.");
-            }
+            } catch { Alert.alert("Gagal", "Tidak dapat menghapus riwayat."); }
           },
         },
       ]);
     };
 
-    // ─── Recording pulse animation ────────────────────────────────
     useEffect(() => {
       if (voiceState === "recording") {
         Animated.loop(Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.3, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1,   duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])).start();
         Animated.loop(Animated.timing(waveAnim, { toValue: 1, duration: 1200, useNativeDriver: false })).start();
       } else {
         pulseAnim.stopAnimation(); pulseAnim.setValue(1);
-        waveAnim.stopAnimation(); waveAnim.setValue(0);
+        waveAnim.stopAnimation();  waveAnim.setValue(0);
       }
     }, [voiceState]);
 
-    // ─── Add message helper ─────────────────────────────────────────
     const addMessage = useCallback((role: "user" | "assistant", content: string): Message => {
       const msg: Message = {
         id: Date.now().toString() + Math.random().toString(36).slice(2),
@@ -146,7 +136,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       return msg;
     }, []);
 
-    // ─── TTS ────────────────────────────────────────────────────────
     const stopTTS = async () => {
       try {
         if (soundRef.current) {
@@ -155,8 +144,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
           soundRef.current = null;
         }
       } catch {}
-      setVoiceState("idle");
-      setSpeakingMsgId(null);
+      setVoiceState("idle"); setSpeakingMsgId(null);
     };
 
     const playTTS = async (text: string, msgId?: string) => {
@@ -185,14 +173,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     };
 
     const handleBubbleTTS = async (msg: Message) => {
-      if (speakingMsgId === msg.id && voiceState === "playing") {
-        await stopTTS();
-      } else {
-        await playTTS(msg.content, msg.id);
-      }
+      if (speakingMsgId === msg.id && voiceState === "playing") await stopTTS();
+      else await playTTS(msg.content, msg.id);
     };
 
-    // ─── Copy to clipboard ──────────────────────────────────────────
     const copyToClipboard = async (msg: Message) => {
       await Clipboard.setStringAsync(msg.content);
       setCopiedMsgId(msg.id);
@@ -200,7 +184,28 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       setTimeout(() => setCopiedMsgId(null), 2000);
     };
 
-    // ─── Send text ──────────────────────────────────────────────────
+    const sendFeedback = async (msg: Message, vote: Feedback) => {
+      const current = feedbackMap[msg.id];
+      const newVote = current === vote ? undefined : vote;
+      setFeedbackMap(prev => {
+        const next = { ...prev };
+        if (newVote) next[msg.id] = newVote; else delete next[msg.id];
+        return next;
+      });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try {
+        await fetch(apiRef.current.chatFeedback, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            msg_ts: Math.floor(msg.ts / 1000),
+            content: msg.content,
+            feedback: newVote ?? null,
+          }),
+        });
+      } catch { /* ignore — UI sudah update */ }
+    };
+
     const sendText = async (text: string) => {
       if (!text.trim()) return;
       addMessage("user", text);
@@ -215,12 +220,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         const reply = data.reply || "Tidak ada respons.";
         const aMsg = addMessage("assistant", reply);
         if (isCallMode || ttsEnabled) await playTTS(reply, aMsg.id);
-      } catch {
-        addMessage("assistant", "Maaf, gagal terhubung ke TERRA.");
-      }
+      } catch { addMessage("assistant", "Maaf, gagal terhubung ke TERRA."); }
     };
 
-    // ─── Voice / STT ────────────────────────────────────────────────
     const startRecording = async () => {
       try {
         const { status } = await Audio.requestPermissionsAsync();
@@ -249,8 +251,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         const sttData = await sttRes.json();
         const transcript = sttData.text || "";
         setCallTranscript(transcript);
-        if (transcript) await sendText(transcript);
-        else setVoiceState("idle");
+        if (transcript) await sendText(transcript); else setVoiceState("idle");
       } catch { setVoiceState("idle"); }
     };
 
@@ -258,7 +259,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       setIsCallMode(v => {
         if (!v) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          addMessage("assistant", "Halo! Saya TERRA. Tekan tombol mikrofon untuk berbicara dengan saya.");
+          addMessage("assistant", "Halo! Saya TERRA. Tekan tombol mikrofon untuk berbicara.");
         }
         return !v;
       });
@@ -269,13 +270,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       else if (voiceState === "idle") startRecording();
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    //  RENDER
-    // ═══════════════════════════════════════════════════════════════
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
-
-        {/* ── Header ── */}
         <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <View style={styles.headerLeft}>
             <View style={[styles.avatar, { backgroundColor: colors.primary + "22" }]}>
@@ -307,7 +303,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
           </View>
         </View>
 
-        {/* ── Call Mode Overlay ── */}
         {isCallMode && (
           <LinearGradient colors={[colors.card, colors.background]} style={styles.callBanner}>
             <View style={[styles.callAvatarLarge, {
@@ -332,17 +327,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
           </LinearGradient>
         )}
 
-        {/* ── Chat Messages ── */}
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.chatList, { paddingBottom: 16 }]}>
-
           {isLoadingHistory && (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Memuat riwayat chat...</Text>
             </View>
           )}
-
           {!isLoadingHistory && messages.length === 0 && (
             <View style={styles.emptyState}>
               <View style={[styles.emptyIcon, { backgroundColor: colors.primary + "22" }]}>
@@ -362,11 +354,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
             </View>
           )}
 
-          {/* ── Pesan chat ── */}
           {messages.map(msg => (
             <View key={msg.id} style={msg.role === "user" ? styles.msgWrapUser : styles.msgWrapAssistant}>
-
-              {/* Bubble */}
               <View style={[
                 styles.bubble,
                 msg.role === "user"
@@ -380,10 +369,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
                   {msg.content}
                 </Text>
 
-                {/* ── Bubble footer: action bar ── */}
                 {msg.role === "assistant" ? (
-                  <View style={[styles.bubbleFooter, { borderTopColor: colors.border + "60" }]}>
-                    {/* TTS per bubble */}
+                  <View style={[styles.bubbleFooter, { borderTopColor: colors.border + "50" }]}>
                     <Pressable onPress={() => handleBubbleTTS(msg)}
                       disabled={voiceState === "processing" || voiceState === "recording"}
                       style={({ pressed }) => [styles.footerBtn, { opacity: pressed ? 0.6 : 1 }]}>
@@ -394,7 +381,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
                       />
                     </Pressable>
 
-                    {/* Copy */}
                     <Pressable onPress={() => copyToClipboard(msg)}
                       style={({ pressed }) => [styles.footerBtn, { opacity: pressed ? 0.6 : 1 }]}>
                       <Feather
@@ -404,14 +390,30 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
                       />
                     </Pressable>
 
-                    {/* Spacer + timestamp */}
+                    <Pressable onPress={() => sendFeedback(msg, "up")}
+                      style={({ pressed }) => [styles.footerBtn, { opacity: pressed ? 0.6 : 1 }]}>
+                      <Feather
+                        name="thumbs-up"
+                        size={15}
+                        color={feedbackMap[msg.id] === "up" ? colors.primary : colors.mutedForeground}
+                      />
+                    </Pressable>
+
+                    <Pressable onPress={() => sendFeedback(msg, "down")}
+                      style={({ pressed }) => [styles.footerBtn, { opacity: pressed ? 0.6 : 1 }]}>
+                      <Feather
+                        name="thumbs-down"
+                        size={15}
+                        color={feedbackMap[msg.id] === "down" ? colors.destructive : colors.mutedForeground}
+                      />
+                    </Pressable>
+
                     <View style={{ flex: 1 }} />
                     <Text style={[styles.footerTime, { color: colors.mutedForeground }]}>
                       {formatTime(msg.ts)}
                     </Text>
                   </View>
                 ) : (
-                  /* User bubble: just timestamp */
                   <Text style={[styles.userTime, { color: "rgba(255,255,255,0.55)" }]}>
                     {formatDateTime(msg.ts)}
                   </Text>
@@ -421,7 +423,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
           ))}
         </ScrollView>
 
-        {/* ── Text Input Bar ── */}
         {!isCallMode && (
           <View style={[styles.inputBar, {
             backgroundColor: colors.card,
@@ -429,7 +430,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
             paddingBottom: Math.max(insets.bottom, 16),
             marginBottom: tabBarH,
           }]}>
-            {/* Mic */}
             <Pressable onPress={voiceButtonAction} disabled={voiceState === "processing"}
               style={[styles.circleBtn, {
                 backgroundColor: voiceState === "recording" ? colors.destructive + "22" : colors.muted,
@@ -439,7 +439,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
                 color={voiceState === "recording" ? colors.destructive : colors.mutedForeground} />
             </Pressable>
 
-            {/* TTS toggle — enable/disable auto TTS di samping mic */}
             <Pressable onPress={() => { setTtsEnabled(v => !v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
               style={[styles.circleBtn, {
                 backgroundColor: ttsEnabled ? colors.accent + "22" : colors.muted,
@@ -456,7 +455,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
               onSubmitEditing={() => sendText(inputText)}
               returnKeyType="send" multiline
             />
-
             <Pressable onPress={() => sendText(inputText)} disabled={!inputText.trim()}
               style={({ pressed }) => [styles.sendBtn, {
                 backgroundColor: inputText.trim() ? colors.primary : colors.muted,
@@ -505,17 +503,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     bubbleAssistant: { alignSelf: "flex-start", borderWidth: 1, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 0 },
     bubbleName: { fontSize: 11, fontWeight: "700", marginBottom: 3 },
     bubbleText: { fontSize: 14, lineHeight: 21 },
-    // Footer bar bawah bubble assistant (mirip gambar referensi)
-    bubbleFooter: {
-      flexDirection: "row", alignItems: "center",
-      marginTop: 8, paddingTop: 6, paddingBottom: 6,
-      paddingHorizontal: 0, borderTopWidth: 1, gap: 2,
-    },
-    footerBtn: { padding: 5, borderRadius: 6 },
+    bubbleFooter: { flexDirection: "row", alignItems: "center", marginTop: 8, paddingTop: 6, paddingBottom: 7, borderTopWidth: 1 },
+    footerBtn: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
     footerTime: { fontSize: 11 },
-    // Timestamp user bubble
     userTime: { fontSize: 10, marginTop: 4, textAlign: "right", paddingBottom: 8 },
-    // Input bar
     inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, borderTopWidth: 1 },
     circleBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1 },
     textInput: { flex: 1, borderRadius: 12, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14, maxHeight: 100 },
