@@ -63,6 +63,6 @@
     "@tanstack/react-query": "^5.62.0",
     "zod": "^3.23.8",
     "expo-file-system": "~18.0.12",
-    "react-native-android-widget": "^1.7.1"
+    "react-native-android-widget": "^0.20.3"
   }
 }
