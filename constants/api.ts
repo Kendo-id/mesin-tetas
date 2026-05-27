@@ -26,6 +26,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
       chat:              `${b}/api/chat`,
       chatClear:         `${b}/api/chat/clear`,
       chatHistory:       (limit = 100) => `${b}/api/chat/history?limit=${limit}`,
+      chatFeedback:      `${b}/api/chat/feedback`,
       command:           `${b}/api/command`,
       config:            `${b}/api/config`,
       incubationCurrent: `${b}/api/incubation/current`,
