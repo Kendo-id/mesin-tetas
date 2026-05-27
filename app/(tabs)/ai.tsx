@@ -163,35 +163,40 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         });
         if (!res.ok) throw new Error("TTS HTTP " + res.status);
 
-        // Konversi response binary ke base64 (Hermes-compatible)
-        const arrayBuffer = await res.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        // Base64 encode manual — btoa tidak ada di Hermes React Native
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let base64 = "";
-        for (let i = 0; i < bytes.length; i += 3) {
-          const b0 = bytes[i], b1 = bytes[i+1] ?? 0, b2 = bytes[i+2] ?? 0;
-          base64 += chars[b0 >> 2];
-          base64 += chars[((b0 & 3) << 4) | (b1 >> 4)];
-          base64 += i+1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "=";
-          base64 += i+2 < bytes.length ? chars[b2 & 63] : "=";
-        }
+        // Gunakan blob() + FileReader — lebih andal di React Native Hermes
+          // (arrayBuffer() kadang return buffer kosong untuk binary response di RN 0.74+)
+          const blob = await res.blob();
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              const comma = dataUrl.indexOf(',');
+              resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+            };
+            reader.onerror = () => reject(new Error('FileReader gagal membaca audio TTS'));
+            reader.readAsDataURL(blob);
+          });
 
-        // Tulis ke file cache
-        await FileSystem.writeAsStringAsync(localUri, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+          if (!base64 || base64.length < 4) throw new Error('TTS: response audio kosong dari server');
 
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
+          // Tulis ke file cache
+          await FileSystem.writeAsStringAsync(localUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
 
-        const { sound } = await Audio.Sound.createAsync({ uri: localUri });
-        soundRef.current = sound;
-        await sound.playAsync();
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+          });
+
+          // shouldPlay:true lebih andal dari createAsync + playAsync() terpisah
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: localUri },
+            { shouldPlay: true }
+          );
+          soundRef.current = sound;
         sound.setOnPlaybackStatusUpdate(s => {
           if (s.isLoaded && s.didJustFinish) {
             setVoiceState("idle");
