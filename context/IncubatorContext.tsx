@@ -60,6 +60,7 @@ interface IncubatorContextType {
   isConnected: boolean;
   isLoading: boolean;
   lastUpdated: Date | null;
+  lastError: string | null;
   serverUrl: string;
   sendCommand: (command: string, value: unknown) => Promise<boolean>;
   refreshNow: () => void;
@@ -68,6 +69,23 @@ interface IncubatorContextType {
 
 const IncubatorContext = createContext<IncubatorContextType | null>(null);
 
+/**
+ * fetchWithTimeout: ganti AbortSignal.timeout() yang tidak didukung di React Native / Hermes.
+ * AbortSignal.timeout() hanya tersedia di Node.js 17.3+ dan browser modern,
+ * bukan di Hermes engine — sehingga setiap fetch langsung throw TypeError.
+ */
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 10000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
 export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const [sensor, setSensor] = useState<SensorData>(DEFAULT_SENSOR);
   const [status, setStatus] = useState<DeviceStatus>(DEFAULT_STATUS);
@@ -75,6 +93,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState(DEFAULT_BASE_URL);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const apiRef = useRef(buildApi(DEFAULT_BASE_URL));
@@ -91,17 +110,18 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const fetchSensorData = useCallback(async () => {
     try {
-      const res = await fetch(apiRef.current.sensorLatest, {
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      const res = await fetchWithTimeout(apiRef.current.sensorLatest, {}, 8000);
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       const data = await res.json();
       if (data.sensor) setSensor((prev) => ({ ...prev, ...data.sensor }));
       if (data.status) setStatus((prev) => ({ ...prev, ...data.status }));
       setIsConnected(true);
+      setLastError(null);
       setLastUpdated(new Date());
-    } catch {
+    } catch (e: unknown) {
       setIsConnected(false);
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -109,9 +129,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const fetchIncubation = useCallback(async () => {
     try {
-      const res = await fetch(apiRef.current.incubationCurrent, {
-        signal: AbortSignal.timeout(10000),
-      });
+      const res = await fetchWithTimeout(apiRef.current.incubationCurrent, {}, 8000);
       if (!res.ok) return;
       const data = await res.json();
       setIncubation(data);
@@ -136,12 +154,15 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
 
   const sendCommand = useCallback(async (command: string, value: unknown): Promise<boolean> => {
     try {
-      const res = await fetch(apiRef.current.command, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command, value }),
-        signal: AbortSignal.timeout(10000),
-      });
+      const res = await fetchWithTimeout(
+        apiRef.current.command,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command, value }),
+        },
+        10000
+      );
       if (!res.ok) return false;
       const data = await res.json();
       await fetchSensorData();
@@ -156,13 +177,11 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
     fetchIncubation();
   }, [fetchSensorData, fetchIncubation]);
 
-  // Ganti URL server tanpa rebuild
   const updateServerUrl = useCallback(async (url: string) => {
     const clean = url.replace(/\/$/, "");
     await AsyncStorage.setItem(SERVER_URL_KEY, clean);
     setServerUrl(clean);
     apiRef.current = buildApi(clean);
-    // Restart polling dengan URL baru
     startPolling();
   }, [startPolling]);
 
@@ -170,7 +189,7 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
     <IncubatorContext.Provider
       value={{
         sensor, status, incubation, isConnected, isLoading,
-        lastUpdated, serverUrl, sendCommand, refreshNow, updateServerUrl,
+        lastUpdated, lastError, serverUrl, sendCommand, refreshNow, updateServerUrl,
       }}
     >
       {children}
