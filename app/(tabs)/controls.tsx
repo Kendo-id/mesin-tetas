@@ -26,12 +26,14 @@ export default function ControlsScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const toggle = async (command: string, currentValue: boolean) => {
+    if (!isConnected) return;
     setLoading(command);
     await sendCommand(command, !currentValue ? "on" : "off");
     setLoading(null);
   };
 
   const turnNow = async () => {
+    if (!isConnected) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     setLoading("turn_now");
     await sendCommand("turn_now", true);
@@ -39,12 +41,14 @@ export default function ControlsScreen() {
   };
 
   const stopMotor = async () => {
+    if (!isConnected) return;
     setLoading("motor_stop");
     await sendCommand("motor_stop", true);
     setLoading(null);
   };
 
   const reboot = () => {
+    if (!isConnected) return;
     Alert.alert("Reboot ESP32", "Yakin mau reboot controller?", [
       { text: "Batal", style: "cancel" },
       {
@@ -61,16 +65,23 @@ export default function ControlsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, {
+        paddingTop: topPad + 12,
+        backgroundColor: colors.card,
+        borderBottomColor: colors.border,
+      }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>Kontrol Perangkat</Text>
-        <View style={[styles.modeChip, {
-          backgroundColor: status.auto_mode ? colors.accent + "22" : colors.primary + "22",
-          borderColor: status.auto_mode ? colors.accent : colors.primary,
-        }]}>
-          <Text style={[styles.modeText, { color: status.auto_mode ? colors.accent : colors.primary }]}>
-            {status.auto_mode ? "Mode Otomatis" : "Mode Manual"}
-          </Text>
-        </View>
+        {/* Mode chip hanya tampil ketika terhubung (bukan dari default) */}
+        {isConnected && (
+          <View style={[styles.modeChip, {
+            backgroundColor: status.auto_mode ? colors.accent + "22" : colors.primary + "22",
+            borderColor: status.auto_mode ? colors.accent : colors.primary,
+          }]}>
+            <Text style={[styles.modeText, { color: status.auto_mode ? colors.accent : colors.primary }]}>
+              {status.auto_mode ? "Mode Otomatis" : "Mode Manual"}
+            </Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -78,21 +89,27 @@ export default function ControlsScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]}
       >
         {!isConnected && (
-          <AlertBanner message="Tidak terhubung ke server. Perintah mungkin tidak terkirim." type="error" />
+          <AlertBanner
+            message="Tidak terhubung ke server. Buka Pengaturan untuk mengatur URL server."
+            type="error"
+          />
         )}
 
         {/* Mode Auto */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>MODE OPERASI</Text>
         <Pressable
           onPress={() => toggle("auto_mode", status.auto_mode)}
+          disabled={!isConnected}
           style={({ pressed }) => [styles.bigToggle, {
-            backgroundColor: status.auto_mode ? colors.accent + "15" : colors.card,
-            borderColor: status.auto_mode ? colors.accent : colors.border,
-            opacity: pressed ? 0.85 : 1,
+            backgroundColor: isConnected && status.auto_mode ? colors.accent + "15" : colors.card,
+            borderColor: isConnected && status.auto_mode ? colors.accent : colors.border,
+            opacity: !isConnected ? 0.5 : pressed ? 0.85 : 1,
           }]}
         >
-          <View style={[styles.bigToggleIcon, { backgroundColor: status.auto_mode ? colors.accent + "22" : colors.muted }]}>
-            <Feather name="cpu" size={26} color={status.auto_mode ? colors.accent : colors.mutedForeground} />
+          <View style={[styles.bigToggleIcon, {
+            backgroundColor: isConnected && status.auto_mode ? colors.accent + "22" : colors.muted,
+          }]}>
+            <Feather name="cpu" size={26} color={isConnected && status.auto_mode ? colors.accent : colors.mutedForeground} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.bigToggleTitle, { color: colors.foreground }]}>Mode Otomatis</Text>
@@ -100,13 +117,17 @@ export default function ControlsScreen() {
               PID kontrol suhu & kelembaban secara otomatis
             </Text>
           </View>
-          <View style={[styles.pill, {
-            backgroundColor: status.auto_mode ? colors.accent : colors.muted,
-          }]}>
-            <Text style={[styles.pillText, { color: status.auto_mode ? "#fff" : colors.mutedForeground }]}>
-              {status.auto_mode ? "ON" : "OFF"}
-            </Text>
-          </View>
+          {isConnected ? (
+            <View style={[styles.pill, { backgroundColor: status.auto_mode ? colors.accent : colors.muted }]}>
+              <Text style={[styles.pillText, { color: status.auto_mode ? "#fff" : colors.mutedForeground }]}>
+                {status.auto_mode ? "ON" : "OFF"}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.pill, { backgroundColor: colors.muted }]}>
+              <Text style={[styles.pillText, { color: colors.mutedForeground }]}>--</Text>
+            </View>
+          )}
         </Pressable>
 
         {/* Main Actuators */}
@@ -116,18 +137,20 @@ export default function ControlsScreen() {
             icon="zap"
             label="Pemanas"
             sublabel="SSR → Elemen AC"
-            active={status.heater}
+            active={isConnected && status.heater}
             color={colors.heaterColor}
             loading={loading === "heater"}
+            disabled={!isConnected}
             onToggle={() => toggle("heater", status.heater)}
           />
           <ControlToggle
             icon="droplet"
             label="Humidifier"
             sublabel="Ultrasonik 5V"
-            active={status.humidifier}
+            active={isConnected && status.humidifier}
             color={colors.humidityColor}
             loading={loading === "humidifier"}
+            disabled={!isConnected}
             onToggle={() => toggle("humidifier", status.humidifier)}
           />
         </View>
@@ -136,9 +159,10 @@ export default function ControlsScreen() {
             icon="wind"
             label="Kipas Sirkulasi"
             sublabel="DC 12V"
-            active={status.fan}
+            active={isConnected && status.fan}
             color={colors.fanColor}
             loading={loading === "fan"}
+            disabled={!isConnected}
             onToggle={() => toggle("fan", status.fan)}
           />
           <ControlToggle
@@ -148,6 +172,7 @@ export default function ControlsScreen() {
             active={false}
             color={colors.secondary}
             loading={loading === "spare"}
+            disabled={!isConnected}
             onToggle={() => toggle("spare", false)}
           />
         </View>
@@ -157,25 +182,31 @@ export default function ControlsScreen() {
         <View style={[styles.motorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.motorStatus}>
             <View style={[styles.motorDot, {
-              backgroundColor: status.motor_state === "stop" ? colors.mutedForeground : colors.primary,
+              backgroundColor: !isConnected
+                ? colors.mutedForeground
+                : status.motor_state === "stop"
+                ? colors.mutedForeground
+                : colors.primary,
             }]} />
             <Text style={[styles.motorLabel, { color: colors.foreground }]}>
-              Motor: <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>
-                {status.motor_state?.toUpperCase() || "STOP"}
+              Motor:{" "}
+              <Text style={{ color: isConnected ? colors.primary : colors.mutedForeground, fontFamily: "Inter_700Bold" }}>
+                {isConnected ? (status.motor_state?.toUpperCase() || "STOP") : "--"}
               </Text>
             </Text>
             <Text style={[styles.trayPos, { color: colors.mutedForeground }]}>
-              Posisi: {status.tray_position || (status.tray_tilted ? "Kiri" : "Kanan")}
+              Posisi: {isConnected ? (status.tray_position || (status.tray_tilted ? "Kiri" : "Kanan")) : "--"}
             </Text>
           </View>
 
           <View style={styles.motorBtns}>
             <Pressable
               onPress={turnNow}
+              disabled={!isConnected}
               style={({ pressed }) => [styles.motorBtn, {
                 backgroundColor: colors.primary + "18",
                 borderColor: colors.primary,
-                opacity: pressed ? 0.8 : 1,
+                opacity: !isConnected ? 0.4 : pressed ? 0.8 : 1,
               }]}
             >
               <Feather name="refresh-cw" size={18} color={colors.primary} />
@@ -184,10 +215,11 @@ export default function ControlsScreen() {
 
             <Pressable
               onPress={stopMotor}
+              disabled={!isConnected}
               style={({ pressed }) => [styles.motorBtn, {
                 backgroundColor: colors.destructive + "18",
                 borderColor: colors.destructive,
-                opacity: pressed ? 0.8 : 1,
+                opacity: !isConnected ? 0.4 : pressed ? 0.8 : 1,
               }]}
             >
               <Feather name="square" size={18} color={colors.destructive} />
@@ -198,7 +230,9 @@ export default function ControlsScreen() {
           <View style={[styles.intervalInfo, { borderTopColor: colors.border }]}>
             <Feather name="clock" size={12} color={colors.mutedForeground} />
             <Text style={[styles.intervalText, { color: colors.mutedForeground }]}>
-              Interval {status.turn_interval_min} mnt · Durasi {status.turn_duration_sec} dtk
+              {isConnected
+                ? `Interval ${status.turn_interval_min} mnt · Durasi ${status.turn_duration_sec} dtk`
+                : "Hubungkan ke server untuk melihat jadwal balik"}
             </Text>
           </View>
         </View>
@@ -207,18 +241,21 @@ export default function ControlsScreen() {
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SISTEM</Text>
         <Pressable
           onPress={reboot}
+          disabled={!isConnected}
           style={({ pressed }) => [styles.dangerBtn, {
             backgroundColor: colors.destructive + "15",
             borderColor: colors.destructive + "66",
-            opacity: pressed ? 0.8 : 1,
+            opacity: !isConnected ? 0.4 : pressed ? 0.8 : 1,
           }]}
         >
           <Feather name="refresh-cw" size={18} color={colors.destructive} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.dangerBtnTitle, { color: colors.destructive }]}>Reboot ESP32</Text>
-            <Text style={[styles.dangerBtnSub, { color: colors.mutedForeground }]}>Restart controller — mesin tetap berjalan</Text>
+            <Text style={[styles.dangerBtnSub, { color: colors.mutedForeground }]}>
+              {isConnected ? "Restart controller — mesin tetap berjalan" : "Hubungkan ke server terlebih dahulu"}
+            </Text>
           </View>
-          <Feather name="chevron-right" size={18} color={colors.destructive} />
+          <Feather name="chevron-right" size={18} color={isConnected ? colors.destructive : colors.mutedForeground} />
         </Pressable>
       </ScrollView>
     </View>
@@ -249,7 +286,7 @@ const styles = StyleSheet.create({
   motorBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
   motorBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   intervalInfo: { flexDirection: "row", gap: 6, alignItems: "center", padding: 12, borderTopWidth: 1 },
-  intervalText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  intervalText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
   dangerBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 16, borderWidth: 1 },
   dangerBtnTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   dangerBtnSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
