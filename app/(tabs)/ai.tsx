@@ -36,7 +36,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     const colors = useColors();
     const insets = useSafeAreaInsets();
     const { serverUrl } = useIncubator();
-    const API = buildApi(serverUrl);
+    // Pakai ref agar API object tidak trigger re-render / infinite loop
+    const apiRef = useRef(buildApi(serverUrl));
+    useEffect(() => {
+      apiRef.current = buildApi(serverUrl);
+    }, [serverUrl]);
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState("");
     const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -55,12 +59,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       : 50 + Math.max(insets.bottom + 12, 40);
 
     // ── Load riwayat chat dari server DB ────────────────────────────
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const loadHistory = useCallback(async () => {
       setIsLoadingHistory(true);
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(API.chatHistory(100), { signal: controller.signal });
+        const res = await fetch(apiRef.current.chatHistory(100), { signal: controller.signal });
         clearTimeout(timer);
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data: Array<{ ts: number; role: string; content: string }> = await res.json();
@@ -78,7 +83,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       } finally {
         setIsLoadingHistory(false);
       }
-    }, [API]);
+    // serverUrl sebagai dep — bukan API object — agar tidak loop
+    }, [serverUrl]);
 
     useEffect(() => {
       loadHistory();
@@ -96,7 +102,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
             style: "destructive",
             onPress: async () => {
               try {
-                const res = await fetch(API.chatClear, { method: "POST" });
+                const res = await fetch(apiRef.current.chatClear, { method: "POST" });
                 if (!res.ok) throw new Error("HTTP " + res.status);
                 setMessages([]);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -146,7 +152,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         setVoiceState("playing");
         const localUri = FileSystem.cacheDirectory + "tts_" + Date.now() + ".mp3";
         const downloadRes = await FileSystem.downloadAsync(
-          API.tts,
+          apiRef.current.tts,
           localUri,
           {
             method: "POST",
@@ -181,7 +187,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
       addMessage("user", text);
       setInputText("");
       try {
-        const res = await fetch(API.chat, {
+        const res = await fetch(apiRef.current.chat, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text }),
@@ -230,7 +236,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         formData.append("audio", { uri, name: "recording.m4a", type: "audio/m4a" } as unknown as Blob);
         formData.append("lang", "id");
 
-        const sttRes = await fetch(API.stt, { method: "POST", body: formData });
+        const sttRes = await fetch(apiRef.current.stt, { method: "POST", body: formData });
         const sttData = await sttRes.json();
         const transcript = sttData.text || "";
         setCallTranscript(transcript);

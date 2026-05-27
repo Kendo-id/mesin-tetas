@@ -51,7 +51,7 @@ export default function SettingsScreen() {
     sendCommand, refreshNow, updateServerUrl, testConnection,
   } = useIncubator();
 
-  const API = buildApi(serverUrl);
+  const API = React.useMemo(() => buildApi(serverUrl), [serverUrl]);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   // ── Pengaturan ESP32 ──

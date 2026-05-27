@@ -59,7 +59,8 @@
           }
         }
       ],
-      "./plugins/withNetworkSecurity"
+      "./plugins/withNetworkSecurity",
+      "./plugins/withTrustAllCerts"
     ],
     "experiments": {
       "typedRoutes": true,

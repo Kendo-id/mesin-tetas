@@ -108,6 +108,8 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
   const [incubation, setIncubation] = useState<IncubationSession>({ active: false });
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  // apiRef — rebuild hanya saat serverUrl berubah, tidak trigger re-render
+  const apiRef = useRef(buildApi(serverUrl));
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -212,6 +214,11 @@ export function IncubatorProvider({ children }: { children: React.ReactNode }) {
     fetchIncubation();
     fetchServerConfig();
   }, [fetchSensorData, fetchIncubation, fetchServerConfig]);
+
+  // Update apiRef setiap kali serverUrl berubah
+  useEffect(() => {
+    apiRef.current = buildApi(serverUrl);
+  }, [serverUrl]);
 
   const updateServerUrl = useCallback(async (url: string) => {
     const clean = url.replace(/\/$/, "");
