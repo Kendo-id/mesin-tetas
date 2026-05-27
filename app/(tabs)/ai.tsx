@@ -346,6 +346,7 @@ export default function AIScreen() {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
           paddingBottom: Math.max(insets.bottom, 16),
+          marginBottom: tabBarH,
         }]}>
           <Pressable
             onPress={voiceButtonAction}
