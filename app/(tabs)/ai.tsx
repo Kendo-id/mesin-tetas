@@ -163,14 +163,19 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         });
         if (!res.ok) throw new Error("TTS HTTP " + res.status);
 
-        // Konversi response binary ke base64
+        // Konversi response binary ke base64 (Hermes-compatible)
         const arrayBuffer = await res.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        let binary = "";
-        for (let i = 0; i < uint8.byteLength; i++) {
-          binary += String.fromCharCode(uint8[i]);
+        const bytes = new Uint8Array(arrayBuffer);
+        // Base64 encode manual — btoa tidak ada di Hermes React Native
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let base64 = "";
+        for (let i = 0; i < bytes.length; i += 3) {
+          const b0 = bytes[i], b1 = bytes[i+1] ?? 0, b2 = bytes[i+2] ?? 0;
+          base64 += chars[b0 >> 2];
+          base64 += chars[((b0 & 3) << 4) | (b1 >> 4)];
+          base64 += i+1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "=";
+          base64 += i+2 < bytes.length ? chars[b2 & 63] : "=";
         }
-        const base64 = btoa(binary);
 
         // Tulis ke file cache
         await FileSystem.writeAsStringAsync(localUri, base64, {
