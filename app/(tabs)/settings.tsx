@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Alert,
   Modal,
@@ -21,6 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import { useIncubator } from "@/context/IncubatorContext";
 import { buildApi } from "@/constants/api";
 import type { TestResult } from "@/context/IncubatorContext";
+import { scanLocalNetwork, ScanResult, ScanProgress } from "@/utils/networkScan";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -74,9 +75,7 @@ export default function SettingsScreen() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
-  useEffect(() => {
-    setServerUrlInput(serverUrl);
-  }, [serverUrl]);
+  useEffect(() => { setServerUrlInput(serverUrl); }, [serverUrl]);
 
   const handleTestAndSave = async () => {
     const url = serverUrlInput.trim();
@@ -89,14 +88,11 @@ export default function SettingsScreen() {
     setTesting(false);
     if (result.ok) {
       setSavingUrl(true);
-      try {
-        await updateServerUrl(url);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {
+      await updateServerUrl(url).catch(() => {
         Alert.alert("Error", "Gagal menyimpan URL server.");
-      } finally {
-        setSavingUrl(false);
-      }
+      });
+      setSavingUrl(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
@@ -104,17 +100,69 @@ export default function SettingsScreen() {
     const url = serverUrlInput.trim();
     if (!url) return;
     setSavingUrl(true);
+    await updateServerUrl(url);
+    setSavingUrl(false);
+    setTestResult(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Disimpan", "URL server disimpan. Menghubungkan...");
+  };
+
+  // ── Scan Jaringan Lokal ──
+  const [scanPort, setScanPort] = useState("5000");
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const cancelRef = useRef({ current: false });
+
+  const startScan = async () => {
+    setScanning(true);
+    setScanResults([]);
+    setScanError(null);
+    setScanProgress(null);
+    cancelRef.current = false;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     try {
-      await updateServerUrl(url);
-      Alert.alert("Disimpan", "URL server disimpan. Menghubungkan...");
-      setTestResult(null);
-    } catch {
-      Alert.alert("Error", "Gagal menyimpan URL server.");
+      const port = parseInt(scanPort) || 5000;
+      const results = await scanLocalNetwork(
+        port,
+        (p) => setScanProgress({ ...p }),
+        cancelRef
+      );
+      setScanResults(results);
+      if (results.length === 0 && !cancelRef.current) {
+        setScanError(`Tidak ditemukan server di port ${port}. Coba port lain atau pastikan Flask sudah jalan.`);
+      }
+      if (results.length > 0) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      setScanError(e instanceof Error ? e.message : "Scan gagal.");
     } finally {
-      setSavingUrl(false);
+      setScanning(false);
     }
   };
+
+  const cancelScan = () => {
+    cancelRef.current = true;
+    setScanning(false);
+  };
+
+  const selectScanResult = async (result: ScanResult) => {
+    setServerUrlInput(result.url);
+    setTestResult(null);
+    setScanResults([]);
+    setScanProgress(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Langsung simpan & hubungkan
+    setSavingUrl(true);
+    await updateServerUrl(result.url).catch(() => {});
+    setSavingUrl(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const progressPct = scanProgress
+    ? Math.round((scanProgress.scanned / scanProgress.total) * 100)
+    : 0;
 
   // ── Inkubasi ──
   const [species, setSpecies] = useState<SpeciesKey>("ayam");
@@ -147,7 +195,7 @@ export default function SettingsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Berhasil", "Pengaturan disimpan dan dikirim ke ESP32.");
     } catch {
-      Alert.alert("Error", "Gagal menyimpan pengaturan. Cek koneksi server.");
+      Alert.alert("Error", "Gagal menyimpan pengaturan.");
     } finally {
       setSaving(false);
     }
@@ -204,18 +252,14 @@ export default function SettingsScreen() {
     }
   };
 
-  // ── Widget notifikasi ──
+  // ── Widget ──
   const [widgetEnabled, setWidgetEnabled] = useState(false);
 
   const toggleWidget = async (val: boolean) => {
     setWidgetEnabled(val);
     if (val) {
-      const { status: permStatus } = await Notifications.requestPermissionsAsync();
-      if (permStatus !== "granted") {
-        setWidgetEnabled(false);
-        Alert.alert("Izin Diperlukan", "Aktifkan notifikasi untuk widget suhu.");
-        return;
-      }
+      const { status: ps } = await Notifications.requestPermissionsAsync();
+      if (ps !== "granted") { setWidgetEnabled(false); return; }
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "TerraBreed Monitor",
@@ -236,7 +280,7 @@ export default function SettingsScreen() {
   const NumberInput = ({ label, value, onChangeText, unit }: {
     label: string; value: string; onChangeText: (v: string) => void; unit: string;
   }) => (
-    <View style={[styles.numInput, { borderColor: colors.border, backgroundColor: colors.card }]}>
+    <View style={[styles.numInput, { borderColor: colors.border, backgroundColor: colors.muted }]}>
       <Text style={[styles.numInputLabel, { color: colors.mutedForeground }]}>{label}</Text>
       <View style={styles.numInputRight}>
         <TextInput
@@ -253,7 +297,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Modal Selesaikan Inkubasi — cross-platform */}
+      {/* Modal Selesaikan Inkubasi */}
       <Modal
         visible={finishModalVisible}
         transparent
@@ -270,7 +314,11 @@ export default function SettingsScreen() {
               value={hatchedInput}
               onChangeText={setHatchedInput}
               keyboardType="numeric"
-              style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+              style={[styles.modalInput, {
+                color: colors.foreground,
+                borderColor: colors.border,
+                backgroundColor: colors.muted,
+              }]}
               autoFocus
               selectTextOnFocus
             />
@@ -292,7 +340,12 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      {/* Header */}
+      <View style={[styles.header, {
+        paddingTop: topPad + 12,
+        backgroundColor: colors.card,
+        borderBottomColor: colors.border,
+      }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>Pengaturan</Text>
         <View style={styles.connStatus}>
           <View style={[styles.connDot, { backgroundColor: isConnected ? colors.accent : colors.destructive }]} />
@@ -308,7 +361,9 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
 
-        {/* ══ KONEKSI SERVER ══ */}
+        {/* ══════════════════════════════════════
+            KONEKSI SERVER
+        ══════════════════════════════════════ */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>KONEKSI SERVER</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
 
@@ -317,7 +372,9 @@ export default function SettingsScreen() {
           <TextInput
             style={[styles.textInput, {
               color: colors.foreground,
-              borderColor: testResult ? (testResult.ok ? colors.accent : colors.destructive) : colors.border,
+              borderColor: testResult
+                ? testResult.ok ? colors.accent : colors.destructive
+                : colors.border,
               backgroundColor: colors.background,
             }]}
             value={serverUrlInput}
@@ -329,35 +386,40 @@ export default function SettingsScreen() {
             keyboardType="url"
           />
 
-          {/* Contoh URL */}
-          <View style={[styles.hintBox, { backgroundColor: colors.primary + "11" }]}>
+          {/* Hint */}
+          <View style={[styles.hintBox, { backgroundColor: colors.primary + "12" }]}>
             <Feather name="info" size={12} color={colors.primary} />
             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              {"Jaringan lokal: http://192.168.1.100:5000/terrabreed\n"}
-              {"Internet/domain: https://kendo-assistant.com/terrabreed"}
+              {"Lokal:  http://192.168.1.x:5000/terrabreed\n"}
+              {"Domain: https://kendo-assistant.com/terrabreed"}
             </Text>
           </View>
 
-          {/* Status koneksi aktif */}
+          {/* Status aktif */}
           <View style={[styles.statusRow, {
-            backgroundColor: isConnected ? colors.accent + "11" : colors.destructive + "11",
+            backgroundColor: isConnected ? colors.accent + "12" : colors.destructive + "12",
             borderColor: isConnected ? colors.accent + "44" : colors.destructive + "33",
           }]}>
-            <View style={[styles.statusDot, { backgroundColor: isConnected ? colors.accent : colors.destructive }]} />
+            <View style={[styles.statusDot, {
+              backgroundColor: isConnected ? colors.accent : colors.destructive,
+            }]} />
             <Text style={[styles.statusText, { color: isConnected ? colors.accent : colors.destructive }]}>
-              {isConnected ? `Terhubung ke: ${serverUrl}` : "Tidak terhubung"}
+              {isConnected ? `Terhubung · ${serverUrl}` : "Tidak terhubung"}
             </Text>
           </View>
 
-          {/* Pesan error jika ada */}
+          {/* Pesan error koneksi */}
           {!isConnected && lastError && (
-            <View style={[styles.errorBox, { backgroundColor: colors.destructive + "11", borderColor: colors.destructive + "44" }]}>
+            <View style={[styles.errorBox, {
+              backgroundColor: colors.destructive + "11",
+              borderColor: colors.destructive + "44",
+            }]}>
               <Feather name="alert-circle" size={13} color={colors.destructive} />
               <Text style={[styles.errorText, { color: colors.destructive }]}>{lastError}</Text>
             </View>
           )}
 
-          {/* Hasil test koneksi */}
+          {/* Hasil test */}
           {testResult && (
             <View style={[styles.testResultBox, {
               backgroundColor: testResult.ok ? colors.accent + "11" : colors.destructive + "11",
@@ -369,33 +431,34 @@ export default function SettingsScreen() {
                 color={testResult.ok ? colors.accent : colors.destructive}
               />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.testResultText, { color: testResult.ok ? colors.accent : colors.destructive }]}>
+                <Text style={[styles.testResultText, {
+                  color: testResult.ok ? colors.accent : colors.destructive,
+                }]}>
                   {testResult.message}
                 </Text>
                 {testResult.url && (
                   <Text style={[styles.testResultUrl, { color: colors.mutedForeground }]}>
-                    URL: {testResult.url}
+                    {testResult.url}
                   </Text>
                 )}
               </View>
             </View>
           )}
 
-          {/* Tombol Test + Simpan */}
+          {/* Tombol Test & Simpan */}
           <View style={styles.btnRow}>
             <Pressable
               onPress={handleTestAndSave}
               disabled={testing || savingUrl || !serverUrlInput.trim()}
               style={({ pressed }) => [styles.testBtn, {
                 backgroundColor: colors.primary,
-                opacity: testing || savingUrl || !serverUrlInput.trim() ? 0.6 : pressed ? 0.85 : 1,
+                opacity: testing || savingUrl || !serverUrlInput.trim() ? 0.55 : pressed ? 0.85 : 1,
               }]}
             >
-              {testing ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Feather name="wifi" size={15} color="#fff" />
-              )}
+              {testing
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Feather name="wifi" size={14} color="#fff" />
+              }
               <Text style={styles.testBtnText}>
                 {testing ? "Mengetes..." : "Test & Simpan"}
               </Text>
@@ -406,7 +469,7 @@ export default function SettingsScreen() {
               disabled={savingUrl || testing || !serverUrlInput.trim()}
               style={({ pressed }) => [styles.saveUrlBtn, {
                 borderColor: colors.border,
-                opacity: savingUrl || testing ? 0.6 : pressed ? 0.85 : 1,
+                opacity: savingUrl || testing ? 0.55 : pressed ? 0.8 : 1,
               }]}
             >
               <Text style={[styles.saveUrlBtnText, { color: colors.foreground }]}>
@@ -414,9 +477,154 @@ export default function SettingsScreen() {
               </Text>
             </Pressable>
           </View>
+
+          {/* ── Divider ── */}
+          <View style={[styles.scanDivider, { backgroundColor: colors.border }]} />
+
+          {/* ── SCAN OTOMATIS ── */}
+          <Text style={[styles.scanTitle, { color: colors.foreground }]}>Scan Otomatis Jaringan Lokal</Text>
+          <Text style={[styles.scanDesc, { color: colors.mutedForeground }]}>
+            Deteksi subnet dari IP DHCP perangkat, lalu scan semua host untuk menemukan server Flask.
+          </Text>
+
+          {/* Port input + Tombol scan */}
+          <View style={styles.scanRow}>
+            <View style={[styles.portInputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <Text style={[styles.portLabel, { color: colors.mutedForeground }]}>Port:</Text>
+              <TextInput
+                value={scanPort}
+                onChangeText={setScanPort}
+                keyboardType="numeric"
+                style={[styles.portInput, { color: colors.foreground }]}
+                editable={!scanning}
+                selectTextOnFocus
+              />
+            </View>
+
+            {scanning ? (
+              <Pressable
+                onPress={cancelScan}
+                style={[styles.scanBtn, { backgroundColor: colors.destructive }]}
+              >
+                <Feather name="x" size={14} color="#fff" />
+                <Text style={styles.scanBtnText}>Batal</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={startScan}
+                style={({ pressed }) => [styles.scanBtn, {
+                  backgroundColor: colors.accent,
+                  opacity: pressed ? 0.8 : 1,
+                }]}
+              >
+                <Feather name="search" size={14} color="#fff" />
+                <Text style={styles.scanBtnText}>Scan</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Progress bar + status */}
+          {scanning && scanProgress && (
+            <View style={styles.scanProgressWrap}>
+              <View style={styles.scanProgressHeader}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={[styles.scanProgressText, { color: colors.mutedForeground }]}>
+                  {`Scanning ${scanProgress.subnet}x:${scanPort}  ·  ${scanProgress.scanned}/${scanProgress.total}`}
+                </Text>
+                <Text style={[styles.scanPct, { color: colors.accent }]}>{progressPct}%</Text>
+              </View>
+              {/* Progress bar */}
+              <View style={[styles.progressBarBg, { backgroundColor: colors.muted }]}>
+                <View style={[styles.progressBarFill, {
+                  backgroundColor: colors.accent,
+                  width: `${progressPct}%` as any,
+                }]} />
+              </View>
+            </View>
+          )}
+
+          {/* Live found servers saat scanning */}
+          {scanning && scanProgress && scanProgress.found.length > 0 && (
+            <View style={styles.scanFoundWrap}>
+              <Text style={[styles.scanFoundLabel, { color: colors.mutedForeground }]}>
+                Ditemukan ({scanProgress.found.length}):
+              </Text>
+              {scanProgress.found.map((r) => (
+                <Pressable
+                  key={r.ip}
+                  onPress={() => selectScanResult(r)}
+                  style={({ pressed }) => [styles.scanFoundItem, {
+                    backgroundColor: colors.accent + "15",
+                    borderColor: colors.accent,
+                    opacity: pressed ? 0.8 : 1,
+                  }]}
+                >
+                  <Feather name="server" size={14} color={colors.accent} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.scanFoundUrl, { color: colors.foreground }]}>{r.url}</Text>
+                    <Text style={[styles.scanFoundLatency, { color: colors.accent }]}>{r.latencyMs}ms</Text>
+                  </View>
+                  <View style={[styles.usePill, { backgroundColor: colors.accent }]}>
+                    <Text style={styles.usePillText}>Gunakan</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {/* Hasil scan selesai */}
+          {!scanning && scanResults.length > 0 && (
+            <View style={styles.scanFoundWrap}>
+              <Text style={[styles.scanFoundLabel, { color: colors.mutedForeground }]}>
+                Server TerraBreed ditemukan ({scanResults.length}):
+              </Text>
+              {scanResults.map((r) => (
+                <Pressable
+                  key={r.ip}
+                  onPress={() => selectScanResult(r)}
+                  style={({ pressed }) => [styles.scanFoundItem, {
+                    backgroundColor: colors.accent + "15",
+                    borderColor: colors.accent,
+                    opacity: pressed ? 0.8 : 1,
+                  }]}
+                >
+                  <Feather name="server" size={14} color={colors.accent} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.scanFoundUrl, { color: colors.foreground }]}>{r.url}</Text>
+                    <Text style={[styles.scanFoundLatency, { color: colors.accent }]}>
+                      {r.latencyMs}ms
+                    </Text>
+                  </View>
+                  <View style={[styles.usePill, { backgroundColor: colors.accent }]}>
+                    <Text style={styles.usePillText}>Gunakan ▶</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {/* Scan error */}
+          {scanError && !scanning && (
+            <View style={[styles.errorBox, {
+              backgroundColor: colors.destructive + "11",
+              borderColor: colors.destructive + "44",
+            }]}>
+              <Feather name="alert-triangle" size={13} color={colors.destructive} />
+              <Text style={[styles.errorText, { color: colors.destructive }]}>{scanError}</Text>
+            </View>
+          )}
+
+          {/* Scan cancelled */}
+          {!scanning && cancelRef.current && scanResults.length === 0 && !scanError && (
+            <Text style={[styles.scanCancelText, { color: colors.mutedForeground }]}>
+              Scan dibatalkan.
+            </Text>
+          )}
         </View>
 
-        {/* ══ INFO SERVER — hanya tampil ketika terhubung, data dari /api/config ══ */}
+        {/* ══════════════════════════════════════
+            INFO SERVER — hanya saat terhubung, data dari /api/config
+        ══════════════════════════════════════ */}
         {isConnected && serverConfig && (
           <>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>INFO SERVER</Text>
@@ -446,7 +654,9 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {/* ══ WIDGET HOMESCREEN ══ */}
+        {/* ══════════════════════════════════════
+            WIDGET HOMESCREEN
+        ══════════════════════════════════════ */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>WIDGET HOMESCREEN</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.infoRow}>
@@ -476,7 +686,9 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        {/* ══ SESI INKUBASI — hanya tampil ketika terhubung ══ */}
+        {/* ══════════════════════════════════════
+            SESI INKUBASI
+        ══════════════════════════════════════ */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SESI INKUBASI</Text>
         {!isConnected ? (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -493,14 +705,12 @@ export default function SettingsScreen() {
               <Feather name="clock" size={18} color={colors.accent} />
               <Text style={[styles.cardLabel, { color: colors.foreground }]}>Sesi Aktif</Text>
             </View>
-            <View style={{ gap: 4 }}>
-              <Text style={[styles.sessionSpecies, { color: colors.primary }]}>
-                {incubation.species?.charAt(0).toUpperCase()}{incubation.species?.slice(1)}
-              </Text>
-              <Text style={[styles.sessionDetail, { color: colors.mutedForeground }]}>
-                {incubation.total_eggs} telur · Hari ke-{incubation.elapsed_days}/{incubation.total_days}
-              </Text>
-            </View>
+            <Text style={[styles.sessionSpecies, { color: colors.primary }]}>
+              {incubation.species?.charAt(0).toUpperCase()}{incubation.species?.slice(1)}
+            </Text>
+            <Text style={[styles.sessionDetail, { color: colors.mutedForeground }]}>
+              {incubation.total_eggs} telur · Hari ke-{incubation.elapsed_days}/{incubation.total_days}
+            </Text>
             <Pressable
               onPress={() => { setHatchedInput("0"); setFinishModalVisible(true); }}
               style={({ pressed }) => [styles.finishBtn, {
@@ -574,12 +784,16 @@ export default function SettingsScreen() {
               }]}
             >
               <Feather name="play" size={16} color="#fff" />
-              <Text style={styles.startBtnText}>{startingSession ? "Memulai..." : "Mulai Inkubasi"}</Text>
+              <Text style={styles.startBtnText}>
+                {startingSession ? "Memulai..." : "Mulai Inkubasi"}
+              </Text>
             </Pressable>
           </View>
         )}
 
-        {/* ══ PENGATURAN ESP32 — hanya tampil ketika terhubung ══ */}
+        {/* ══════════════════════════════════════
+            PENGATURAN ESP32
+        ══════════════════════════════════════ */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PENGATURAN ESP32</Text>
         {!isConnected ? (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -632,39 +846,95 @@ const styles = StyleSheet.create({
   divider: { height: 1 },
   fieldLabel: { fontSize: 11, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
   textInput: {
-    borderWidth: 1.5,
-    borderRadius: 10,
-    padding: 11,
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    borderWidth: 1.5, borderRadius: 10, padding: 11,
+    fontSize: 13, fontFamily: "Inter_400Regular",
   },
   hintBox: { flexDirection: "row", gap: 8, alignItems: "flex-start", padding: 10, borderRadius: 10 },
   hintText: { flex: 1, fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
+  statusRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    padding: 10, borderRadius: 10, borderWidth: 1,
+  },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium" },
-  errorBox: { flexDirection: "row", gap: 8, alignItems: "flex-start", padding: 10, borderRadius: 10, borderWidth: 1 },
+  errorBox: {
+    flexDirection: "row", gap: 8, alignItems: "flex-start",
+    padding: 10, borderRadius: 10, borderWidth: 1,
+  },
   errorText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  testResultBox: { flexDirection: "row", gap: 10, alignItems: "flex-start", padding: 12, borderRadius: 12, borderWidth: 1.5 },
+  testResultBox: {
+    flexDirection: "row", gap: 10, alignItems: "flex-start",
+    padding: 12, borderRadius: 12, borderWidth: 1.5,
+  },
   testResultText: { fontSize: 13, fontFamily: "Inter_500Medium", lineHeight: 18 },
   testResultUrl: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2 },
   btnRow: { flexDirection: "row", gap: 8 },
-  testBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 13, borderRadius: 12 },
+  testBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 8, padding: 13, borderRadius: 12,
+  },
   testBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
-  saveUrlBtn: { paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  saveUrlBtn: {
+    paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12,
+    borderWidth: 1, alignItems: "center", justifyContent: "center",
+  },
   saveUrlBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  // ── Scan ──
+  scanDivider: { height: 1 },
+  scanTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  scanDesc: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16, marginTop: -4 },
+  scanRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  portInputWrap: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+  },
+  portLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  portInput: { fontSize: 16, fontFamily: "Inter_700Bold", minWidth: 52, textAlign: "center" },
+  scanBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12,
+  },
+  scanBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
+  scanProgressWrap: { gap: 6 },
+  scanProgressHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  scanProgressText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular" },
+  scanPct: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  progressBarBg: { height: 6, borderRadius: 3, overflow: "hidden" },
+  progressBarFill: { height: 6, borderRadius: 3 },
+  scanFoundWrap: { gap: 8 },
+  scanFoundLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
+  scanFoundItem: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 12, borderRadius: 12, borderWidth: 1,
+  },
+  scanFoundUrl: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  scanFoundLatency: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 1 },
+  usePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  usePillText: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" },
+  scanCancelText: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
+  // ── Widget ──
   widgetIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   cardLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   cardSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1, flex: 1 },
-  widgetPreview: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
+  widgetPreview: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    padding: 10, borderRadius: 10, borderWidth: 1,
+  },
   widgetPreviewText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  // ── Inkubasi ──
   sessionSpecies: { fontSize: 20, fontFamily: "Inter_700Bold" },
   sessionDetail: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  finishBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
+  finishBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, padding: 12, borderRadius: 12, borderWidth: 1,
+  },
   finishBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   speciesChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   speciesChipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  numInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderRadius: 12, borderWidth: 1 },
+  numInput: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 12, borderRadius: 12, borderWidth: 1,
+  },
   numInputLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
   numInputRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   numInputField: { fontSize: 16, fontFamily: "Inter_700Bold", minWidth: 50, textAlign: "right" },
@@ -672,15 +942,28 @@ const styles = StyleSheet.create({
   notesInput: { borderRadius: 12, padding: 12, fontSize: 13, fontFamily: "Inter_400Regular" },
   presetInfo: { padding: 10, borderRadius: 10 },
   presetInfoText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  startBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 12 },
+  startBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, padding: 14, borderRadius: 12,
+  },
   startBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
-  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 12, marginTop: 4 },
+  saveBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, padding: 14, borderRadius: 12, marginTop: 4,
+  },
   saveBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 24 },
+  // ── Modal ──
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center", alignItems: "center", padding: 24,
+  },
   modalBox: { width: "100%", maxWidth: 360, borderRadius: 20, borderWidth: 1, padding: 24, gap: 16 },
   modalTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   modalDesc: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  modalInput: { borderRadius: 10, borderWidth: 1, padding: 12, fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center" },
+  modalInput: {
+    borderRadius: 10, borderWidth: 1, padding: 12,
+    fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center",
+  },
   modalBtns: { flexDirection: "row", gap: 10 },
   modalBtn: { flex: 1, padding: 13, borderRadius: 12, alignItems: "center" },
   modalBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
