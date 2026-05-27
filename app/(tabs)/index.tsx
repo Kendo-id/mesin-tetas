@@ -23,18 +23,19 @@ import { AlertBanner } from "@/components/AlertBanner";
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { sensor, status, incubation, isConnected, isLoading, lastUpdated, refreshNow } = useIncubator();
+  const {
+    sensor, status, incubation,
+    isConnected, isLoading, lastUpdated, lastError,
+    refreshNow,
+  } = useIncubator();
   const [refreshing, setRefreshing] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     refreshNow();
-    setTimeout(() => setRefreshing(false), 1000);
+    setTimeout(() => setRefreshing(false), 1200);
   }, [refreshNow]);
-
-  const tempOk = Math.abs(sensor.temp - sensor.target_temp) <= 0.5;
-  const humidOk = Math.abs(sensor.humidity - sensor.target_humid) <= 5;
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -42,6 +43,10 @@ export default function DashboardScreen() {
     if (!d) return "--";
     return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   };
+
+  // Tampilkan nilai sensor hanya ketika terhubung; kalau tidak, tampilkan "--"
+  const fmtNum = (v: number, dec = 1) =>
+    isConnected && v !== 0 ? v.toFixed(dec) : "--";
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -54,22 +59,36 @@ export default function DashboardScreen() {
           <View>
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>TerraBreed</Text>
             <View style={styles.connRow}>
-              <View style={[styles.connDot, { backgroundColor: isConnected ? colors.accent : colors.destructive }]} />
+              <View style={[styles.connDot, {
+                backgroundColor: isConnected ? colors.accent : isLoading ? colors.warning : colors.destructive,
+              }]} />
               <Text style={[styles.connLabel, { color: colors.mutedForeground }]}>
-                {isConnected ? `Update ${formatTime(lastUpdated)}` : "Tidak terhubung"}
+                {isLoading && !isConnected
+                  ? "Menghubungkan..."
+                  : isConnected
+                  ? `Update ${formatTime(lastUpdated)}`
+                  : "Tidak terhubung"}
               </Text>
             </View>
           </View>
-          <Pressable onPress={() => router.push("/history")} style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable
+            onPress={() => router.push("/history")}
+            style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Feather name="bar-chart-2" size={20} color={colors.mutedForeground} />
           </Pressable>
         </View>
 
-        {incubation.active && (
-          <View style={[styles.incubationBadge, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" }]}>
+        {isConnected && incubation.active && (
+          <View style={[styles.incubationBadge, {
+            backgroundColor: colors.primary + "22",
+            borderColor: colors.primary + "44",
+          }]}>
             <Feather name="clock" size={13} color={colors.primary} />
             <Text style={[styles.incubationText, { color: colors.primary }]}>
-              {incubation.species?.charAt(0).toUpperCase()}{incubation.species?.slice(1)} · Hari ke-{incubation.elapsed_days}/{incubation.total_days} · {incubation.total_eggs} telur
+              {incubation.species?.charAt(0).toUpperCase()}{incubation.species?.slice(1)}
+              {" · "}Hari ke-{incubation.elapsed_days}/{incubation.total_days}
+              {" · "}{incubation.total_eggs} telur
             </Text>
           </View>
         )}
@@ -78,19 +97,30 @@ export default function DashboardScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
       >
+        {/* Error banner — tampilkan pesan error spesifik */}
         {!isConnected && !isLoading && (
           <AlertBanner
-            message="Gagal terhubung ke server. Pastikan jaringan aktif."
+            message={
+              lastError
+                ? lastError
+                : "Gagal terhubung ke server. Buka Pengaturan untuk atur URL server."
+            }
             type="error"
           />
+        )}
+
+        {isLoading && !isConnected && (
+          <AlertBanner message="Menghubungkan ke server..." type="info" />
         )}
 
         {/* Main Gauges */}
         <View style={styles.gaugesRow}>
           <GaugeCircle
-            value={sensor.temp}
+            value={isConnected ? sensor.temp : 0}
             min={30}
             max={45}
             target={sensor.target_temp}
@@ -98,9 +128,10 @@ export default function DashboardScreen() {
             label="Suhu Aktif"
             color={colors.temperatureColor}
             size={160}
+            placeholder={!isConnected}
           />
           <GaugeCircle
-            value={sensor.humidity}
+            value={isConnected ? sensor.humidity : 0}
             min={20}
             max={100}
             target={sensor.target_humid}
@@ -108,6 +139,7 @@ export default function DashboardScreen() {
             label="Kelembaban"
             color={colors.humidityColor}
             size={160}
+            placeholder={!isConnected}
           />
         </View>
 
@@ -116,94 +148,117 @@ export default function DashboardScreen() {
           <View style={styles.targetItem}>
             <Feather name="target" size={14} color={colors.mutedForeground} />
             <Text style={[styles.targetLabel, { color: colors.mutedForeground }]}>Target Suhu</Text>
-            <Text style={[styles.targetValue, { color: colors.temperatureColor }]}>{sensor.target_temp}°C</Text>
+            <Text style={[styles.targetValue, { color: colors.temperatureColor }]}>
+              {isConnected ? `${sensor.target_temp}°C` : "--"}
+            </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.targetItem}>
             <Feather name="droplet" size={14} color={colors.mutedForeground} />
             <Text style={[styles.targetLabel, { color: colors.mutedForeground }]}>Target Lembab</Text>
-            <Text style={[styles.targetValue, { color: colors.humidityColor }]}>{sensor.target_humid}%</Text>
+            <Text style={[styles.targetValue, { color: colors.humidityColor }]}>
+              {isConnected ? `${sensor.target_humid}%` : "--"}
+            </Text>
           </View>
         </View>
 
-        {/* Sensor Cards Row 1 */}
-        <View style={styles.cardRow}>
-          <SensorCard
-            icon="thermometer"
-            label="DS18B20 #1"
-            value={sensor.temp_ds1.toFixed(1)}
-            unit="°C"
-            color={colors.temperatureColor}
-            status={Math.abs(sensor.temp_ds1 - sensor.target_temp) <= 1 ? "ok" : "warn"}
-          />
-          <SensorCard
-            icon="thermometer"
-            label="DS18B20 #2"
-            value={sensor.temp_ds2.toFixed(1)}
-            unit="°C"
-            color={colors.temperatureColor}
-            status={Math.abs(sensor.temp_ds2 - sensor.target_temp) <= 1 ? "ok" : "warn"}
-          />
-        </View>
-
-        {/* Sensor Cards Row 2 */}
-        <View style={styles.cardRow}>
-          <SensorCard
-            icon="wind"
-            label="SHT31"
-            value={sensor.temp_sht.toFixed(1)}
-            unit="°C"
-            color={colors.fanColor}
-            status="ok"
-          />
-          <SensorCard
-            icon="layers"
-            label="Posisi Rak"
-            value={status.tray_position || (status.tray_tilted ? "Kiri" : "Kanan")}
-            unit=""
-            color={colors.accent}
-            subtitle={`Motor: ${status.motor_state}`}
-          />
-        </View>
-
-        {/* Device Status */}
-        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>STATUS PERANGKAT</Text>
-        <View style={styles.deviceGrid}>
-          {[
-            { label: "Pemanas", icon: "zap" as const, active: status.heater, color: colors.heaterColor },
-            { label: "Humidifier", icon: "droplet" as const, active: status.humidifier, color: colors.humidityColor },
-            { label: "Kipas", icon: "wind" as const, active: status.fan, color: colors.fanColor },
-            { label: "Mode Auto", icon: "cpu" as const, active: status.auto_mode, color: colors.primary },
-          ].map((item) => (
-            <View key={item.label} style={[styles.deviceChip, {
-              backgroundColor: item.active ? item.color + "18" : colors.card,
-              borderColor: item.active ? item.color + "66" : colors.border,
-            }]}>
-              <Feather name={item.icon} size={14} color={item.active ? item.color : colors.mutedForeground} />
-              <Text style={[styles.deviceChipLabel, { color: item.active ? item.color : colors.mutedForeground }]}>
-                {item.label}
-              </Text>
-              <Text style={[styles.deviceChipStatus, { color: item.active ? item.color : colors.mutedForeground }]}>
-                {item.active ? "ON" : "OFF"}
-              </Text>
+        {/* Sensor Cards — hanya tampil ketika terhubung */}
+        {isConnected ? (
+          <>
+            <View style={styles.cardRow}>
+              <SensorCard
+                icon="thermometer"
+                label="DS18B20 #1"
+                value={fmtNum(sensor.temp_ds1)}
+                unit="°C"
+                color={colors.temperatureColor}
+                status={Math.abs(sensor.temp_ds1 - sensor.target_temp) <= 1 ? "ok" : "warn"}
+              />
+              <SensorCard
+                icon="thermometer"
+                label="DS18B20 #2"
+                value={fmtNum(sensor.temp_ds2)}
+                unit="°C"
+                color={colors.temperatureColor}
+                status={Math.abs(sensor.temp_ds2 - sensor.target_temp) <= 1 ? "ok" : "warn"}
+              />
             </View>
-          ))}
-        </View>
 
-        {/* Interval Info */}
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.infoRow}>
-            <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Interval Balik</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{status.turn_interval_min} menit</Text>
+            <View style={styles.cardRow}>
+              <SensorCard
+                icon="wind"
+                label="SHT31"
+                value={fmtNum(sensor.temp_sht)}
+                unit="°C"
+                color={colors.fanColor}
+                status="ok"
+              />
+              <SensorCard
+                icon="layers"
+                label="Posisi Rak"
+                value={status.tray_position || (status.tray_tilted ? "Kiri" : "Kanan")}
+                unit=""
+                color={colors.accent}
+                subtitle={`Motor: ${status.motor_state}`}
+              />
+            </View>
+
+            {/* Device Status */}
+            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>STATUS PERANGKAT</Text>
+            <View style={styles.deviceGrid}>
+              {[
+                { label: "Pemanas", icon: "zap" as const, active: status.heater, color: colors.heaterColor },
+                { label: "Humidifier", icon: "droplet" as const, active: status.humidifier, color: colors.humidityColor },
+                { label: "Kipas", icon: "wind" as const, active: status.fan, color: colors.fanColor },
+                { label: "Mode Auto", icon: "cpu" as const, active: status.auto_mode, color: colors.primary },
+              ].map((item) => (
+                <View key={item.label} style={[styles.deviceChip, {
+                  backgroundColor: item.active ? item.color + "18" : colors.card,
+                  borderColor: item.active ? item.color + "66" : colors.border,
+                }]}>
+                  <Feather name={item.icon} size={14} color={item.active ? item.color : colors.mutedForeground} />
+                  <Text style={[styles.deviceChipLabel, { color: item.active ? item.color : colors.mutedForeground }]}>
+                    {item.label}
+                  </Text>
+                  <Text style={[styles.deviceChipStatus, { color: item.active ? item.color : colors.mutedForeground }]}>
+                    {item.active ? "ON" : "OFF"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Interval Info */}
+            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.infoRow}>
+                <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Interval Balik</Text>
+                <Text style={[styles.infoValue, { color: colors.foreground }]}>{status.turn_interval_min} menit</Text>
+              </View>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View style={styles.infoRow}>
+                <Feather name="clock" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Durasi Motor</Text>
+                <Text style={[styles.infoValue, { color: colors.foreground }]}>{status.turn_duration_sec} detik</Text>
+              </View>
+            </View>
+          </>
+        ) : (
+          /* Placeholder ketika tidak terhubung */
+          <View style={[styles.offlinePlaceholder, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="wifi-off" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.offlineTitle, { color: colors.foreground }]}>Belum Terhubung</Text>
+            <Text style={[styles.offlineDesc, { color: colors.mutedForeground }]}>
+              Buka tab Pengaturan dan masukkan URL server Flask Anda, lalu tekan "Test & Simpan".
+            </Text>
+            <Pressable
+              onPress={() => router.push("/(tabs)/settings")}
+              style={[styles.offlineBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="settings" size={16} color="#fff" />
+              <Text style={styles.offlineBtnText}>Buka Pengaturan</Text>
+            </Pressable>
           </View>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <View style={styles.infoRow}>
-            <Feather name="clock" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Durasi Motor</Text>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>{status.turn_duration_sec} detik</Text>
-          </View>
-        </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -237,4 +292,9 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12 },
   infoLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
   infoValue: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  offlinePlaceholder: { borderRadius: 20, borderWidth: 1, padding: 32, alignItems: "center", gap: 12, marginTop: 8 },
+  offlineTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  offlineDesc: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  offlineBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 4 },
+  offlineBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#fff" },
 });
