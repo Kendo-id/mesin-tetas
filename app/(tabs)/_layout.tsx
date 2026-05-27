@@ -43,7 +43,7 @@ function ClassicTabLayout() {
 
   // Tinggi tab bar = icon(24) + label(12) + paddingTop(8) + paddingBottom + gesture bar
   // Android gesture bar biasanya 24-48dp tergantung HP
-  const gestureBar = isIOS ? insets.bottom : Math.max(insets.bottom, 24);
+  const gestureBar = isIOS ? insets.bottom : Math.max(insets.bottom + 12, 40);
   const tabBarHeight = 50 + gestureBar;
 
   return (
@@ -59,7 +59,7 @@ function ClassicTabLayout() {
           borderTopColor: colors.border,
           elevation: 0,
           height: isWeb ? 84 : tabBarHeight,
-          paddingBottom: isIOS ? insets.bottom : Math.max(insets.bottom, 24),
+          paddingBottom: isIOS ? insets.bottom : Math.max(insets.bottom + 12, 40),
           paddingTop: 6,
         },
         tabBarBackground: () =>
