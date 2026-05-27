@@ -17,22 +17,23 @@ export async function setBaseUrl(url: string): Promise<void> {
 }
 
 export function buildApi(base: string) {
+  const b = base.replace(/\/$/, "");
   return {
-    sensorLatest: `${base}/api/sensor/latest`,
-    sensorHistory: (minutes: number) => `${base}/api/sensor/history?minutes=${minutes}`,
-    sensorStats: `${base}/api/sensor/stats`,
-    alarms: (limit = 20) => `${base}/api/alarms?limit=${limit}`,
-    chat: `${base}/api/chat`,
-    chatClear: `${base}/api/chat/clear`,
-    command: `${base}/api/command`,
-    incubationCurrent: `${base}/api/incubation/current`,
-    incubationStart: `${base}/api/incubation/start`,
-    incubationFinish: `${base}/api/incubation/finish`,
-    settings: `${base}/api/settings`,
-    tts: `${base}/api/tts`,
-    stt: `${base}/api/stt`,
+    sensorLatest:     `${b}/api/sensor/latest`,
+    sensorHistory:    (minutes: number) => `${b}/api/sensor/history?minutes=${minutes}`,
+    sensorStats:      `${b}/api/sensor/stats`,
+    alarms:           (limit = 20) => `${b}/api/alarms?limit=${limit}`,
+    chat:             `${b}/api/chat`,
+    chatClear:        `${b}/api/chat/clear`,
+    command:          `${b}/api/command`,
+    config:           `${b}/api/config`,
+    incubationCurrent:`${b}/api/incubation/current`,
+    incubationStart:  `${b}/api/incubation/start`,
+    incubationFinish: `${b}/api/incubation/finish`,
+    settings:         `${b}/api/settings`,
+    tts:              `${b}/api/tts`,
+    stt:              `${b}/api/stt`,
   };
 }
 
-// Export static API untuk backward compat — akan diupdate di context
 export const API = buildApi(DEFAULT_BASE_URL);
