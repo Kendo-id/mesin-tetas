@@ -60,7 +60,47 @@
         }
       ],
       "./plugins/withNetworkSecurity",
-      "./plugins/withTrustAllCerts"
+      "./plugins/withTrustAllCerts",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "TemperatureWidget",
+              "label": "Suhu - TerraBreed",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "description": "Monitor suhu realtime mesin tetas",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            },
+            {
+              "name": "HumidityWidget",
+              "label": "Kelembapan - TerraBreed",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "description": "Monitor kelembapan mesin tetas",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            },
+            {
+              "name": "IncubationWidget",
+              "label": "Sesi Inkubasi - TerraBreed",
+              "minWidth": "250dp",
+              "minHeight": "80dp",
+              "targetCellWidth": 5,
+              "targetCellHeight": 2,
+              "description": "Status sesi inkubasi aktif",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
