@@ -21,7 +21,9 @@
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
     "web": {
@@ -52,7 +54,7 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": false,
+            "usesCleartextTraffic": true,
             "networkInspector": false
           }
         }
