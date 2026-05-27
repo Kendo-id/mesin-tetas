@@ -108,7 +108,7 @@ export default function SettingsScreen() {
   };
 
   // ── Scan Jaringan Lokal ──
-  const [scanPort, setScanPort] = useState("5000");
+  const [scanPort, setScanPort] = useState("80");
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
@@ -124,7 +124,7 @@ export default function SettingsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const port = parseInt(scanPort) || 5000;
+      const port = parseInt(scanPort) || 80;
       const results = await scanLocalNetwork(
         port,
         (p) => setScanProgress({ ...p }),
@@ -379,7 +379,7 @@ export default function SettingsScreen() {
             }]}
             value={serverUrlInput}
             onChangeText={(t) => { setServerUrlInput(t); setTestResult(null); }}
-            placeholder="http://192.168.1.x:5000/terrabreed"
+            placeholder="http://192.168.1.x/terrabreed"
             placeholderTextColor={colors.mutedForeground}
             autoCapitalize="none"
             autoCorrect={false}
@@ -390,8 +390,8 @@ export default function SettingsScreen() {
           <View style={[styles.hintBox, { backgroundColor: colors.primary + "12" }]}>
             <Feather name="info" size={12} color={colors.primary} />
             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              {"Lokal:  http://192.168.1.x:5000/terrabreed\n"}
-              {"Domain: https://kendo-assistant.com/terrabreed"}
+              {"Lokal (Nginx port 80): http://192.168.1.x/terrabreed\n"}
+              {"HTTPS domain:         https://kendo-assistant.com/terrabreed"}
             </Text>
           </View>
 
@@ -529,7 +529,7 @@ export default function SettingsScreen() {
               <View style={styles.scanProgressHeader}>
                 <ActivityIndicator size="small" color={colors.accent} />
                 <Text style={[styles.scanProgressText, { color: colors.mutedForeground }]}>
-                  {`Scanning ${scanProgress.subnet}x:${scanPort}  ·  ${scanProgress.scanned}/${scanProgress.total}`}
+                  {`Scanning ${scanProgress.subnet}x${scanPort === "80" ? "" : scanPort === "443" ? "" : `:${scanPort}`}  ·  ${scanProgress.scanned}/${scanProgress.total}`}
                 </Text>
                 <Text style={[styles.scanPct, { color: colors.accent }]}>{progressPct}%</Text>
               </View>
