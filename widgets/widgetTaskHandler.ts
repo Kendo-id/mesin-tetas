@@ -1,6 +1,6 @@
 import React from 'react';
   import AsyncStorage from '@react-native-async-storage/async-storage';
-  import { WidgetTaskHandlerProps } from 'react-native-android-widget';
+  import { type WidgetTaskHandler } from 'react-native-android-widget';
   import { buildApi, DEFAULT_BASE_URL, SERVER_URL_KEY } from '@/constants/api';
   import { TemperatureWidget } from './TemperatureWidget';
   import { HumidityWidget } from './HumidityWidget';
@@ -14,10 +14,14 @@ import React from 'react';
     return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
   }
 
-  export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
-    const { widgetInfo, renderWidget } = props;
-    const widgetName = widgetInfo.widgetName as WidgetName;
+  export const widgetTaskHandler: WidgetTaskHandler = async ({
+    widgetInfo,
+    widgetAction,
+    renderWidget,
+  }) => {
+    if (widgetAction === 'WIDGET_DELETED') return;
 
+    const widgetName = widgetInfo.widgetName as WidgetName;
     const serverUrl = (await AsyncStorage.getItem(SERVER_URL_KEY)) ?? DEFAULT_BASE_URL;
     const api = buildApi(serverUrl);
 
@@ -44,24 +48,26 @@ import React from 'react';
 
     switch (widgetName) {
       case 'TemperatureWidget':
-        await renderWidget(
-          <TemperatureWidget sensor={sensor as Parameters<typeof TemperatureWidget>[0]['sensor']} history={tempHistory} />
+        renderWidget(
+          <TemperatureWidget
+            sensor={sensor as Parameters<typeof TemperatureWidget>[0]['sensor']}
+            history={tempHistory}
+          />
         );
         break;
       case 'HumidityWidget':
-        await renderWidget(
-          <HumidityWidget sensor={sensor as Parameters<typeof HumidityWidget>[0]['sensor']} history={humHistory} />
+        renderWidget(
+          <HumidityWidget
+            sensor={sensor as Parameters<typeof HumidityWidget>[0]['sensor']}
+            history={humHistory}
+          />
         );
         break;
       case 'IncubationWidget':
-        await renderWidget(
-          <IncubationWidget incubation={incubation} sensor={sensor} />
-        );
+        renderWidget(<IncubationWidget incubation={incubation} sensor={sensor} />);
         break;
       default:
-        await renderWidget(
-          <TemperatureWidget sensor={null} history={[]} />
-        );
+        renderWidget(<TemperatureWidget sensor={null} history={[]} />);
     }
-  }
+  };
   
