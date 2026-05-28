@@ -98,7 +98,8 @@
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 0
             }
-          ]
+          ],
+          "widgetTaskHandlerFile": "./widgets/widgetTaskHandler"
         }
       ]
     ],
