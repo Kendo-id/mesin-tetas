@@ -177,30 +177,29 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
         // FileSystem.downloadAsync tidak support body POST,
         // jadi fetch dulu → ambil sebagai base64 → tulis ke file lokal
+        const ttsCtrl = new AbortController();
+        const ttsTimer = setTimeout(() => ttsCtrl.abort(), 20000);
         const res = await fetch(apiRef.current.tts, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, voice: "id-ID-GadisNeural" }),
+          signal: ttsCtrl.signal,
         });
+        clearTimeout(ttsTimer);
         if (!res.ok) throw new Error("TTS HTTP " + res.status);
 
-        // Gunakan blob() + FileReader — lebih andal di React Native Hermes
-          // (arrayBuffer() kadang return buffer kosong untuk binary response di RN 0.74+)
-          const blob = await res.blob();
-          const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const dataUrl = reader.result as string;
-              const comma = dataUrl.indexOf(',');
-              resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
-            };
-            reader.onerror = () => reject(new Error('FileReader gagal membaca audio TTS'));
-            reader.readAsDataURL(blob);
-          });
+        // arrayBuffer + btoa chunked — blob+FileReader gagal pada beberapa Android/Hermes
+          const ab = await res.arrayBuffer();
+          if (!ab || ab.byteLength < 50) throw new Error('TTS: audio response kosong');
+          const bytes = new Uint8Array(ab);
+          let binary = '';
+          const CHUNK = 8192;
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+          }
+          const base64 = btoa(binary);
 
-          if (!base64 || base64.length < 4) throw new Error('TTS: response audio kosong dari server');
-
-          // Tulis ke file cache
+          // Tulis ke file cache lokal
           await FileSystem.writeAsStringAsync(localUri, base64, {
             encoding: FileSystem.EncodingType.Base64,
           });
