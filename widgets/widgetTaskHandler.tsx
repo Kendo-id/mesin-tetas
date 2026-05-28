@@ -41,7 +41,11 @@ function safeRender(
     renderWidget(el);
   } catch (e) {
     console.error('Widget render error:', e);
-    try { renderWidget(<OfflineWidget label={fallback} />); } catch (_) {}
+    try { 
+      renderWidget(<OfflineWidget label={fallback} />); 
+    } catch (renderError) {
+      console.error('Failed to render offline widget:', renderError);
+    }
   }
 }
 
@@ -56,7 +60,9 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
   let serverUrl = DEFAULT_BASE_URL;
   try {
     serverUrl = (await AsyncStorage.getItem(SERVER_URL_KEY)) ?? DEFAULT_BASE_URL;
-  } catch (_) {}
+  } catch (e) {
+    console.warn('Failed to get server URL from AsyncStorage:', e);
+  }
 
   const api = buildApi(serverUrl);
 
@@ -91,42 +97,51 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
     // sensor stays null → widgets render in offline/placeholder state
   }
 
-  switch (widgetName) {
-    case 'TemperatureWidget':
-      safeRender(
-        renderWidget,
-        <TemperatureWidget
-          sensor={sensor as Parameters<typeof TemperatureWidget>[0]['sensor']}
-          history={tempHistory}
-        />,
-        'Suhu tidak tersedia',
-      );
-      break;
+  try {
+    switch (widgetName) {
+      case 'TemperatureWidget':
+        safeRender(
+          renderWidget,
+          <TemperatureWidget
+            sensor={sensor as Parameters<typeof TemperatureWidget>[0]['sensor']}
+            history={tempHistory}
+          />,
+          'Suhu tidak tersedia',
+        );
+        break;
 
-    case 'HumidityWidget':
-      safeRender(
-        renderWidget,
-        <HumidityWidget
-          sensor={sensor as Parameters<typeof HumidityWidget>[0]['sensor']}
-          history={humHistory}
-        />,
-        'Kelembapan tidak tersedia',
-      );
-      break;
+      case 'HumidityWidget':
+        safeRender(
+          renderWidget,
+          <HumidityWidget
+            sensor={sensor as Parameters<typeof HumidityWidget>[0]['sensor']}
+            history={humHistory}
+          />,
+          'Kelembapan tidak tersedia',
+        );
+        break;
 
-    case 'IncubationWidget':
-      safeRender(
-        renderWidget,
-        <IncubationWidget incubation={incubation} sensor={sensor} />,
-        'Inkubasi tidak tersedia',
-      );
-      break;
+      case 'IncubationWidget':
+        safeRender(
+          renderWidget,
+          <IncubationWidget incubation={incubation} sensor={sensor} />,
+          'Inkubasi tidak tersedia',
+        );
+        break;
 
-    default:
-      safeRender(
-        renderWidget,
-        <TemperatureWidget sensor={null} history={[]} />,
-        'Widget tidak dikenal',
-      );
+      default:
+        safeRender(
+          renderWidget,
+          <TemperatureWidget sensor={null} history={[]} />,
+          'Widget tidak dikenal',
+        );
+    }
+  } catch (e) {
+    console.error('Widget switch/render error:', e);
+    try {
+      renderWidget(<OfflineWidget label={`Error: ${(e as Error).message || 'Unknown error'}`} />);
+    } catch (fallbackError) {
+      console.error('Failed to render error fallback:', fallbackError);
+    }
   }
 };
