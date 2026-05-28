@@ -356,7 +356,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     };
 
     const runAutoCallLoop = async () => {
-      await playTTS("Halo! Saya TERRA, asisten inkubator Anda. Silakan bicara, saya dengarkan selama 5 detik.");
+      await playTTS("Halo! Saya Kendo, asisten inkubator Anda. ada yang bisa saya bantu? Silakan bicara.");
       while (autoCallRef.current) {
         const ok = await startRecording();
         if (!ok || !autoCallRef.current) break;
