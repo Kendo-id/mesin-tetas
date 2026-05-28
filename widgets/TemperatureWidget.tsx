@@ -1,61 +1,123 @@
 import React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+  import { FlexWidget, TextWidget, ImageWidget } from 'react-native-android-widget';
 
-interface Props {
-  sensor: {
-    temp: number;
-    temp_ds1: number;
-    temp_ds2: number;
-    temp_sht: number;
-  } | null;
-  history?: number[];
-}
+  interface SensorData {
+    temperature?: number | null;
+    humidity?: number | null;
+    updated_at?: string | null;
+  }
 
-export function TemperatureWidget({ sensor }: Props) {
-  const offline = sensor === null;
-  const temp = sensor?.temp     ?? 0;
-  const ds1  = sensor?.temp_ds1 ?? 0;
-  const ds2  = sensor?.temp_ds2 ?? 0;
-  const sht  = sensor?.temp_sht ?? 0;
+  interface Props {
+    sensor: SensorData | null;
+  }
 
-  const tempColor = offline ? '#4B5A6E'
-    : temp < 36 || temp > 39 ? '#F87171' : '#FFFFFF';
+  export function TemperatureWidget({ sensor }: Props) {
+    const temp = sensor?.temperature != null ? sensor.temperature.toFixed(1) : '--';
+    const isOffline = sensor == null || sensor.temperature == null;
+    const statusColor = isOffline ? '#6B7280' : '#F59E0B';
+    const tempNum = sensor?.temperature ?? 0;
+    const alert = !isOffline && (tempNum < 35 || tempNum > 38.5);
+    const dotColor = alert ? '#EF4444' : isOffline ? '#6B7280' : '#22C55E';
 
-  return (
-    <FlexWidget style={{
-      height: 'match_parent', width: 'match_parent',
-      flexDirection: 'column', justifyContent: 'space-between',
-      backgroundColor: '#131929',
-      paddingTop: 12, paddingBottom: 12, paddingLeft: 14, paddingRight: 14,
-    }}>
-      <TextWidget
-        text="Suhu Inkubator"
-        style={{ fontSize: 11, color: '#8B9AB3', fontFamily: 'sans-serif' }}
-      />
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-        <TextWidget
-          text={offline ? '--' : temp.toFixed(1)}
-          style={{ fontSize: 40, color: tempColor, fontFamily: 'sans-serif' }}
-        />
-        <TextWidget
-          text={'\u00B0C'}
-          style={{ fontSize: 16, color: '#8B9AB3', fontFamily: 'sans-serif' }}
-        />
+    return (
+      <FlexWidget
+        style={{
+          height: 'match_parent',
+          width: 'match_parent',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          backgroundColor: '#0F172A',
+          borderRadius: 16,
+          padding: 14,
+        }}
+      >
+        {/* Header row */}
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <TextWidget
+            text="🌡️ SUHU"
+            style={{
+              fontSize: 11,
+              fontFamily: 'sans-serif-medium',
+              color: '#94A3B8',
+            }}
+          />
+          <FlexWidget
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: dotColor + '22',
+              borderRadius: 20,
+              padding: 4,
+              paddingLeft: 8,
+              paddingRight: 8,
+            }}
+          >
+            <TextWidget
+              text={isOffline ? '● Offline' : alert ? '● Peringatan' : '● Live'}
+              style={{
+                fontSize: 9,
+                color: dotColor,
+                fontFamily: 'sans-serif-medium',
+              }}
+            />
+          </FlexWidget>
+        </FlexWidget>
+
+        {/* Main value */}
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+          }}
+        >
+          <TextWidget
+            text={temp}
+            style={{
+              fontSize: 42,
+              fontFamily: 'sans-serif-black',
+              color: isOffline ? '#4B5563' : statusColor,
+              includeFontPadding: false,
+            }}
+          />
+          <TextWidget
+            text="°C"
+            style={{
+              fontSize: 18,
+              fontFamily: 'sans-serif-medium',
+              color: isOffline ? '#374151' : statusColor,
+              marginLeft: 2,
+              marginBottom: 6,
+            }}
+          />
+        </FlexWidget>
+
+        {/* Footer */}
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <TextWidget
+            text="TerraBreed"
+            style={{ fontSize: 10, color: '#334155', fontFamily: 'sans-serif' }}
+          />
+          <TextWidget
+            text="Ideal 37–38°C"
+            style={{ fontSize: 10, color: '#334155', fontFamily: 'sans-serif' }}
+          />
+        </FlexWidget>
       </FlexWidget>
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <TextWidget
-          text={'S1: ' + (offline ? '--' : ds1.toFixed(1)) + '\u00B0'}
-          style={{ fontSize: 10, color: '#9BAAB9', fontFamily: 'sans-serif' }}
-        />
-        <TextWidget
-          text={'S2: ' + (offline ? '--' : ds2.toFixed(1)) + '\u00B0'}
-          style={{ fontSize: 10, color: '#9BAAB9', fontFamily: 'sans-serif' }}
-        />
-        <TextWidget
-          text={'SHT: ' + (offline ? '--' : sht.toFixed(1)) + '\u00B0'}
-          style={{ fontSize: 10, color: '#9BAAB9', fontFamily: 'sans-serif' }}
-        />
-      </FlexWidget>
-    </FlexWidget>
-  );
-}
+    );
+  }
+  
