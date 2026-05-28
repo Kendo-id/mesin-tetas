@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -74,7 +74,7 @@
               "targetCellHeight": 2,
               "description": "Monitor suhu realtime mesin tetas",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 0
+              "updatePeriodMillis": 1800000
             },
             {
               "name": "HumidityWidget",
@@ -85,7 +85,7 @@
               "targetCellHeight": 2,
               "description": "Monitor kelembapan mesin tetas",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 0
+              "updatePeriodMillis": 1800000
             },
             {
               "name": "IncubationWidget",
@@ -96,7 +96,7 @@
               "targetCellHeight": 2,
               "description": "Status sesi inkubasi aktif",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 0
+              "updatePeriodMillis": 1800000
             }
           ],
           "widgetTaskHandlerFile": "./widgets/widgetTaskHandler"
@@ -104,8 +104,7 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "eas": {
