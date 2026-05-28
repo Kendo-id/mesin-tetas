@@ -23,6 +23,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
   import { useIncubator } from "@/context/IncubatorContext";
   import { buildApi } from "@/constants/api";
   import * as FileSystem from "expo-file-system";
+  import AsyncStorage from "@react-native-async-storage/async-storage";
 
   interface Message {
     id: string;
@@ -51,6 +52,24 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     const apiRef = useRef(buildApi(serverUrl));
     useEffect(() => { apiRef.current = buildApi(serverUrl); }, [serverUrl]);
 
+    // Muat preferensi TTS dari AsyncStorage — bertahan saat navigasi antar tab
+    useEffect(() => {
+      AsyncStorage.getItem('terra_tts_autoplay').then(v => {
+        const on = v === '1';
+        setTtsEnabled(on);
+        ttsEnabledRef.current = on;
+      }).catch(() => {});
+    }, []);
+
+    // Simpan perubahan ttsEnabled dan sync ke ref
+    useEffect(() => {
+      ttsEnabledRef.current = ttsEnabled;
+      AsyncStorage.setItem('terra_tts_autoplay', ttsEnabled ? '1' : '0').catch(() => {});
+    }, [ttsEnabled]);
+
+    // Sync isCallMode ke ref agar terbaca benar di async context
+    useEffect(() => { isCallModeRef.current = isCallMode; }, [isCallMode]);
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState("");
     const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -58,6 +77,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
     const [callTranscript, setCallTranscript] = useState("");
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const [ttsEnabled, setTtsEnabled] = useState(false);
+    const ttsEnabledRef = useRef(false);
+    const isCallModeRef = useRef(false);
     const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
     const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
     const [feedbackMap, setFeedbackMap] = useState<Record<string, Feedback>>({});
@@ -248,7 +269,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
     const sendText = async (text: string) => {
       if (!text.trim()) return;
-      addMessage("user", text);
+      // Saat mode telepon, pesan user tidak ditampilkan di chat (ada di callTranscript)
+      if (!isCallModeRef.current) addMessage("user", text);
       setInputText("");
       try {
         const res = await fetch(apiRef.current.chat, {
@@ -258,9 +280,15 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
         });
         const data = await res.json();
         const reply = data.reply || "Tidak ada respons.";
-        const aMsg = addMessage("assistant", reply);
-        if (isCallMode || ttsEnabled) await playTTS(reply, aMsg.id);
-      } catch { addMessage("assistant", "Maaf, gagal terhubung ke TERRA."); }
+        if (isCallModeRef.current) {
+          // Mode telepon: AI hanya membalas lewat suara, tanpa teks di chat
+          await playTTS(reply);
+        } else {
+          const aMsg = addMessage("assistant", reply);
+          // Pakai ref agar nilai ttsEnabled selalu terbaru di async context
+          if (ttsEnabledRef.current) await playTTS(reply, aMsg.id);
+        }
+      } catch { if (!isCallModeRef.current) addMessage("assistant", "Maaf, gagal terhubung ke TERRA."); }
     };
 
     const startRecording = async () => {
