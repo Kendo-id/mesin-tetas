@@ -1,80 +1,159 @@
 import React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+  import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
-interface IncubationSession {
-  active: boolean;
-  species?: string;
-  total_days?: number;
-  total_eggs?: number;
-  elapsed_days?: number;
-}
+  interface Session {
+    name?: string | null;
+    animal?: string | null;
+    total_eggs?: number | null;
+    day_number?: number | null;
+    total_days?: number | null;
+    status?: string | null;
+  }
 
-interface Props {
-  incubation: { incubation?: IncubationSession } | null;
-  sensor?: { target_temp?: number; target_humid?: number } | null;
-}
+  interface Props {
+    session: Session | null;
+  }
 
-function cap(s: string) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
+  function progressBar(current: number, total: number) {
+    const pct = Math.min(Math.max(current / total, 0), 1);
+    const bars = 12;
+    const filled = Math.round(pct * bars);
+    let s = '';
+    for (let i = 0; i < bars; i++) s += i < filled ? '█' : '░';
+    return s;
+  }
 
-export function IncubationWidget({ incubation, sensor }: Props) {
-  const session   = incubation?.incubation;
-  const active    = session?.active ?? false;
-  const species   = cap(session?.species ?? 'Tidak ada');
-  const eggs      = session?.total_eggs  ?? 0;
-  const totalDays = session?.total_days  ?? 0;
-  const elapsed   = session?.elapsed_days ?? 0;
-  const progress  = totalDays > 0 ? Math.min(100, Math.round((elapsed / totalDays) * 100)) : 0;
-  const targetT   = sensor?.target_temp  ?? 37.5;
-  const targetH   = sensor?.target_humid ?? 60;
+  export function IncubationWidget({ session }: Props) {
+    const isActive = session != null && session.status !== 'completed' && session.day_number != null;
+    const isOffline = session == null;
 
-  const rootStyle = {
-    height: 'match_parent' as const,
-    width:  'match_parent' as const,
-    flexDirection: 'column' as const,
-    backgroundColor: '#131929',
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingLeft: 14,
-    paddingRight: 14,
-  };
+    const dayNum = session?.day_number ?? 0;
+    const totalDays = session?.total_days ?? 21;
+    const name = session?.name ?? 'Tidak ada sesi';
+    const animal = session?.animal ?? '';
+    const eggs = session?.total_eggs ?? 0;
+    const pct = totalDays > 0 ? Math.round((dayNum / totalDays) * 100) : 0;
+    const bar = isActive ? progressBar(dayNum, totalDays) : '';
+    const dotColor = isOffline ? '#6B7280' : isActive ? '#22C55E' : '#6B7280';
 
-  if (!active) {
     return (
-      <FlexWidget style={{ ...rootStyle, justifyContent: 'center', alignItems: 'center' }}>
+      <FlexWidget
+        style={{
+          height: 'match_parent',
+          width: 'match_parent',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          backgroundColor: '#0F172A',
+          borderRadius: 16,
+          padding: 14,
+        }}
+      >
+        {/* Header row */}
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <TextWidget
+            text="🥚 INKUBASI"
+            style={{
+              fontSize: 11,
+              fontFamily: 'sans-serif-medium',
+              color: '#94A3B8',
+            }}
+          />
+          <FlexWidget
+            style={{
+              backgroundColor: dotColor + '22',
+              borderRadius: 20,
+              padding: 4,
+              paddingLeft: 8,
+              paddingRight: 8,
+            }}
+          >
+            <TextWidget
+              text={isOffline ? '● Offline' : isActive ? '● Aktif' : '● Tidak Aktif'}
+              style={{
+                fontSize: 9,
+                color: dotColor,
+                fontFamily: 'sans-serif-medium',
+              }}
+            />
+          </FlexWidget>
+        </FlexWidget>
+
+        {/* Session name */}
         <TextWidget
-          text="Tidak ada sesi inkubasi aktif"
-          style={{ fontSize: 13, color: '#6B7A94', fontFamily: 'sans-serif' }}
+          text={isOffline ? 'Memuat data...' : name}
+          style={{
+            fontSize: 15,
+            fontFamily: 'sans-serif-medium',
+            color: isOffline ? '#4B5563' : '#E2E8F0',
+            width: 'match_parent',
+          }}
         />
+
+        {/* Progress if active */}
+        {isActive && (
+          <FlexWidget
+            style={{
+              width: 'match_parent',
+              flexDirection: 'column',
+            }}
+          >
+            <FlexWidget
+              style={{
+                width: 'match_parent',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginBottom: 4,
+              }}
+            >
+              <TextWidget
+                text={'Hari ' + dayNum + '/' + totalDays}
+                style={{ fontSize: 12, color: '#F59E0B', fontFamily: 'sans-serif-medium' }}
+              />
+              <TextWidget
+                text={pct + '%'}
+                style={{ fontSize: 12, color: '#F59E0B', fontFamily: 'sans-serif-medium' }}
+              />
+            </FlexWidget>
+            <TextWidget
+              text={bar}
+              style={{
+                fontSize: 10,
+                color: '#F59E0B',
+                fontFamily: 'monospace',
+                width: 'match_parent',
+              }}
+            />
+          </FlexWidget>
+        )}
+
+        {/* Footer */}
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <TextWidget
+            text="TerraBreed"
+            style={{ fontSize: 10, color: '#334155', fontFamily: 'sans-serif' }}
+          />
+          {isActive && eggs > 0 && (
+            <TextWidget
+              text={animal + ' · ' + eggs + ' telur'}
+              style={{ fontSize: 10, color: '#334155', fontFamily: 'sans-serif' }}
+            />
+          )}
+        </FlexWidget>
       </FlexWidget>
     );
   }
-
-  return (
-    <FlexWidget style={{ ...rootStyle, justifyContent: 'space-between' }}>
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <TextWidget
-          text="INKUBASI AKTIF"
-          style={{ fontSize: 10, color: '#8B9AB3', fontFamily: 'sans-serif' }}
-        />
-        <TextWidget
-          text={progress + '%'}
-          style={{ fontSize: 12, color: '#4B9EFF', fontFamily: 'sans-serif' }}
-        />
-      </FlexWidget>
-      <TextWidget
-        text={species + (eggs > 0 ? '  ' + eggs + ' butir' : '')}
-        style={{ fontSize: 18, color: '#FFFFFF', fontFamily: 'sans-serif' }}
-      />
-      <TextWidget
-        text={'Target: ' + targetT + '\u00B0C  ' + targetH + '% RH  ' + totalDays + ' hari'}
-        style={{ fontSize: 10, color: '#8B9AB3', fontFamily: 'sans-serif' }}
-      />
-      <TextWidget
-        text={'Hari ke-' + elapsed + ' dari ' + totalDays}
-        style={{ fontSize: 11, color: '#8B9AB3', fontFamily: 'sans-serif' }}
-      />
-    </FlexWidget>
-  );
-}
+  
