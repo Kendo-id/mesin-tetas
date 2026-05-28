@@ -161,39 +161,6 @@ export default function DashboardScreen() {
             </Text>
           </View>
         </View>
-{/* Live Chart Widget */}
-        <View style={[styles.chartWidget, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.chartWidgetHeader}>
-            <Feather name="activity" size={15} color={colors.temperatureColor} />
-            <Text style={[styles.chartWidgetTitle, { color: colors.foreground }]}>Live Monitoring</Text>
-            <Text style={[styles.chartWidgetCount, { color: colors.mutedForeground }]}>
-              {history.length} poin
-            </Text>
-          </View>
-
-          <Text style={[styles.chartSubLabel, { color: colors.mutedForeground }]}>Suhu (°C)</Text>
-          <LiveChart
-            data={history}
-            valueKey="temp"
-            color={colors.temperatureColor}
-            min={34}
-            max={42}
-            unit="°"
-          />
-
-          <View style={[styles.chartDivider, { backgroundColor: colors.border }]} />
-
-          <Text style={[styles.chartSubLabel, { color: colors.mutedForeground }]}>Kelembaban (%)</Text>
-          <LiveChart
-            data={history}
-            valueKey="humidity"
-            color={colors.humidityColor}
-            min={30}
-            max={90}
-            unit="%"
-          />
-        </View>
-
         {/* Sensor Cards Row 1 */}
         <View style={styles.cardRow}>
           <SensorCard
