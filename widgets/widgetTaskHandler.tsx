@@ -9,79 +9,50 @@ import { IncubationWidget } from './IncubationWidget';
 
 type WidgetName = 'TemperatureWidget' | 'HumidityWidget' | 'IncubationWidget';
 
-function fetchWithTimeout(url: string, ms = 8000): Promise<Response> {
+// Shorter timeout for widget context — 6s max
+function fetchJson(url: string, ms = 6000): Promise<unknown> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+  return fetch(url, { signal: ctrl.signal })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .finally(() => clearTimeout(t));
 }
 
-/** Fallback widget shown when render throws or fetch fails entirely */
-function ErrorWidget({ label }: { label: string }) {
+/** Shown when server is offline or widget crashes */
+function OfflineWidget({ label }: { label: string }) {
   return (
-    <FlexWidget
-      style={{
-        height: 'match_parent',
-        width: 'match_parent',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#131929',
-      }}
-    >
-      <TextWidget
-        text={label}
-        style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'sans-serif' }}
-      />
-      <TextWidget
-        text="Tap untuk refresh"
-        style={{ fontSize: 10, color: '#4B5A6E', fontFamily: 'sans-serif' }}
-      />
+    <FlexWidget style={{
+      height: 'match_parent', width: 'match_parent',
+      flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+      backgroundColor: '#131929',
+    }}>
+      <TextWidget text={label} style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'sans-serif' }} />
+      <TextWidget text="Offline" style={{ fontSize: 10, color: '#4B5A6E', fontFamily: 'sans-serif' }} />
     </FlexWidget>
   );
 }
 
-/** Safe renderWidget wrapper — catches synchronous render errors */
-function safeRender(renderWidget: (el: React.ReactElement) => void, el: React.ReactElement, fallbackLabel: string) {
+function safeRender(
+  renderWidget: (el: React.ReactElement) => void,
+  el: React.ReactElement,
+  fallback: string,
+) {
   try {
     renderWidget(el);
   } catch (e) {
     console.error('Widget render error:', e);
-    try {
-      renderWidget(<ErrorWidget label={fallbackLabel} />);
-    } catch (_) {}
+    try { renderWidget(<OfflineWidget label={fallback} />); } catch (_) {}
   }
 }
 
 export const widgetTaskHandler: WidgetTaskHandler = async ({
-  widgetInfo,
-  widgetAction,
-  renderWidget,
+  widgetInfo, widgetAction, renderWidget,
 }) => {
   if (widgetAction === 'WIDGET_DELETED') return;
 
   const widgetName = widgetInfo.widgetName as WidgetName;
 
-  // Show loading state first so widget is never blank
-  try {
-    renderWidget(
-      <FlexWidget
-        style={{
-          height: 'match_parent',
-          width: 'match_parent',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#131929',
-        }}
-      >
-        <TextWidget
-          text="Memuat..."
-          style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'sans-serif' }}
-        />
-      </FlexWidget>
-    );
-  } catch (_) {}
-
+  // Get stored server URL
   let serverUrl = DEFAULT_BASE_URL;
   try {
     serverUrl = (await AsyncStorage.getItem(SERVER_URL_KEY)) ?? DEFAULT_BASE_URL;
@@ -89,6 +60,7 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
 
   const api = buildApi(serverUrl);
 
+  // Fetch all data concurrently with short timeout
   let sensor: Record<string, number> | null = null;
   let incubation: Record<string, unknown> | null = null;
   let tempHistory: number[] = [];
@@ -96,20 +68,27 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
 
   try {
     const [sRes, iRes, hRes] = await Promise.allSettled([
-      fetchWithTimeout(api.sensorLatest).then(r => r.json()),
-      fetchWithTimeout(api.incubationCurrent).then(r => r.json()),
-      fetchWithTimeout(api.sensorHistory(60)).then(r => r.json()),
+      fetchJson(api.sensorLatest),
+      fetchJson(api.incubationCurrent),
+      fetchJson(api.sensorHistory(60)),
     ]);
-    if (sRes.status === 'fulfilled') sensor = sRes.value?.sensor ?? sRes.value ?? null;
-    if (iRes.status === 'fulfilled') incubation = iRes.value ?? null;
+
+    if (sRes.status === 'fulfilled') {
+      const v = sRes.value as Record<string, unknown>;
+      sensor = (v?.sensor ?? v) as Record<string, number> | null;
+    }
+    if (iRes.status === 'fulfilled') {
+      incubation = iRes.value as Record<string, unknown> | null;
+    }
     if (hRes.status === 'fulfilled') {
-      const records: Array<Record<string, number>> = Array.isArray(hRes.value) ? hRes.value : [];
+      const records = Array.isArray(hRes.value) ? hRes.value as Record<string, number>[] : [];
       const recent = records.slice(-20);
       tempHistory = recent.map(r => Number(r.temp ?? 0)).filter(Boolean);
       humHistory  = recent.map(r => Number(r.humidity ?? 0)).filter(Boolean);
     }
   } catch (e) {
-    console.error('Widget data fetch error:', e);
+    console.error('Widget fetch error:', e);
+    // sensor stays null → widgets render in offline/placeholder state
   }
 
   switch (widgetName) {
@@ -120,7 +99,7 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
           sensor={sensor as Parameters<typeof TemperatureWidget>[0]['sensor']}
           history={tempHistory}
         />,
-        'Suhu tidak tersedia'
+        'Suhu tidak tersedia',
       );
       break;
 
@@ -131,7 +110,7 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
           sensor={sensor as Parameters<typeof HumidityWidget>[0]['sensor']}
           history={humHistory}
         />,
-        'Kelembapan tidak tersedia'
+        'Kelembapan tidak tersedia',
       );
       break;
 
@@ -139,7 +118,7 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
       safeRender(
         renderWidget,
         <IncubationWidget incubation={incubation} sensor={sensor} />,
-        'Data inkubasi tidak tersedia'
+        'Inkubasi tidak tersedia',
       );
       break;
 
@@ -147,7 +126,7 @@ export const widgetTaskHandler: WidgetTaskHandler = async ({
       safeRender(
         renderWidget,
         <TemperatureWidget sensor={null} history={[]} />,
-        'Widget tidak dikenal'
+        'Widget tidak dikenal',
       );
   }
 };
