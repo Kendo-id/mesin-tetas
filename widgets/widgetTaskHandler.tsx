@@ -5,13 +5,8 @@ import React from 'react';
   import { HumidityWidget } from './HumidityWidget';
   import { IncubationWidget } from './IncubationWidget';
 
-  // Inline constants — no @/ alias imports in background task context
   const DEFAULT_BASE_URL = 'https://kendo-assistant.com/terrabreed';
   const SERVER_URL_KEY = 'server_url';
-
-  function buildBaseUrl(base: string) {
-    return base.replace(/\/$/, '');
-  }
 
   async function fetchJson(url: string, ms = 5000): Promise<unknown> {
     const ctrl = new AbortController();
@@ -25,7 +20,7 @@ import React from 'react';
     }
   }
 
-  export const widgetTaskHandler: WidgetTaskHandler = async ({
+  const widgetTaskHandler: WidgetTaskHandler = async ({
     widgetInfo,
     widgetAction,
     renderWidget,
@@ -34,30 +29,23 @@ import React from 'react';
 
     const widgetName = widgetInfo.widgetName as string;
 
-    // ── STEP 1: Render offline/placeholder state IMMEDIATELY ─────────────────
-    // This ensures Android sees a valid RemoteViews before any async work.
-    // Without this, if async work times out, the widget stays blank.
-    try {
-      switch (widgetName) {
-        case 'TemperatureWidget':
-          renderWidget(<TemperatureWidget sensor={null} />);
-          break;
-        case 'HumidityWidget':
-          renderWidget(<HumidityWidget sensor={null} />);
-          break;
-        case 'IncubationWidget':
-          renderWidget(<IncubationWidget session={null} />);
-          break;
-        default:
-          return;
-      }
-    } catch (e) {
-      // If even offline render fails, bail out — something is fundamentally wrong
-      console.error('Widget offline render failed:', e);
-      return;
+    // Render IMMEDIATELY with offline/placeholder state first
+    // This ensures Android sees a valid RemoteViews before any async work
+    switch (widgetName) {
+      case 'TemperatureWidget':
+        renderWidget(<TemperatureWidget sensor={null} />);
+        break;
+      case 'HumidityWidget':
+        renderWidget(<HumidityWidget sensor={null} />);
+        break;
+      case 'IncubationWidget':
+        renderWidget(<IncubationWidget session={null} />);
+        break;
+      default:
+        return;
     }
 
-    // ── STEP 2: Fetch live data and update widget ─────────────────────────────
+    // Then try to fetch live data and update
     try {
       let base = DEFAULT_BASE_URL;
       try {
@@ -65,7 +53,7 @@ import React from 'react';
         if (stored) base = stored;
       } catch (_) {}
 
-      const apiBase = buildBaseUrl(base);
+      const apiBase = base.replace(/\/$/, '');
 
       if (widgetName === 'TemperatureWidget' || widgetName === 'HumidityWidget') {
         const sensor = await fetchJson(apiBase + '/api/sensor/latest');
@@ -79,7 +67,10 @@ import React from 'react';
         renderWidget(<IncubationWidget session={session as any} />);
       }
     } catch (_) {
-      // Offline render from step 1 stays — no need to re-render
+      // Offline state from step 1 remains visible
     }
   };
+
+  export { widgetTaskHandler };
+  export default widgetTaskHandler;
   
