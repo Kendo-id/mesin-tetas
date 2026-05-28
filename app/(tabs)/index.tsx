@@ -161,7 +161,78 @@ export default function DashboardScreen() {
             </Text>
           </View>
         </View>
+{/* Live Chart Widget */}
+        <View style={[styles.chartWidget, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.chartWidgetHeader}>
+            <Feather name="activity" size={15} color={colors.temperatureColor} />
+            <Text style={[styles.chartWidgetTitle, { color: colors.foreground }]}>Live Monitoring</Text>
+            <Text style={[styles.chartWidgetCount, { color: colors.mutedForeground }]}>
+              {history.length} poin
+            </Text>
+          </View>
 
+          <Text style={[styles.chartSubLabel, { color: colors.mutedForeground }]}>Suhu (°C)</Text>
+          <LiveChart
+            data={history}
+            valueKey="temp"
+            color={colors.temperatureColor}
+            min={34}
+            max={42}
+            unit="°"
+          />
+
+          <View style={[styles.chartDivider, { backgroundColor: colors.border }]} />
+
+          <Text style={[styles.chartSubLabel, { color: colors.mutedForeground }]}>Kelembaban (%)</Text>
+          <LiveChart
+            data={history}
+            valueKey="humidity"
+            color={colors.humidityColor}
+            min={30}
+            max={90}
+            unit="%"
+          />
+        </View>
+
+        {/* Sensor Cards Row 1 */}
+        <View style={styles.cardRow}>
+          <SensorCard
+            icon="thermometer"
+            label="DS18B20 #1"
+            value={sensor.temp_ds1.toFixed(1)}
+            unit="°C"
+            color={colors.temperatureColor}
+            status={Math.abs(sensor.temp_ds1 - sensor.target_temp) <= 1 ? "ok" : "warn"}
+          />
+          <SensorCard
+            icon="thermometer"
+            label="DS18B20 #2"
+            value={sensor.temp_ds2.toFixed(1)}
+            unit="°C"
+            color={colors.temperatureColor}
+            status={Math.abs(sensor.temp_ds2 - sensor.target_temp) <= 1 ? "ok" : "warn"}
+          />
+        </View>
+
+        {/* Sensor Cards Row 2 */}
+        <View style={styles.cardRow}>
+          <SensorCard
+            icon="wind"
+            label="SHT31"
+            value={sensor.temp_sht.toFixed(1)}
+            unit="°C"
+            color={colors.fanColor}
+            status="ok"
+          />
+          <SensorCard
+            icon="layers"
+            label="Posisi Rak"
+            value={status.tray_position || (status.tray_tilted ? "Kiri" : "Kanan")}
+            unit=""
+            color={colors.accent}
+            subtitle={`Motor: ${status.motor_state}`}
+          />
+        </View>
         {/* Sensor Cards — hanya tampil ketika terhubung */}
         {isConnected ? (
           <>
