@@ -44,7 +44,6 @@ export default function DashboardScreen() {
     return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   };
 
-  // Tampilkan nilai sensor hanya ketika terhubung; kalau tidak, tampilkan "--"
   const fmtNum = (v: number, dec = 1) =>
     isConnected && v !== 0 ? v.toFixed(dec) : "--";
 
@@ -101,7 +100,6 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* Error banner — tampilkan pesan error spesifik */}
         {!isConnected && !isLoading && (
           <AlertBanner
             message={
@@ -161,46 +159,8 @@ export default function DashboardScreen() {
             </Text>
           </View>
         </View>
-        {/* Sensor Cards Row 1 */}
-        <View style={styles.cardRow}>
-          <SensorCard
-            icon="thermometer"
-            label="DS18B20 #1"
-            value={sensor.temp_ds1.toFixed(1)}
-            unit="°C"
-            color={colors.temperatureColor}
-            status={Math.abs(sensor.temp_ds1 - sensor.target_temp) <= 1 ? "ok" : "warn"}
-          />
-          <SensorCard
-            icon="thermometer"
-            label="DS18B20 #2"
-            value={sensor.temp_ds2.toFixed(1)}
-            unit="°C"
-            color={colors.temperatureColor}
-            status={Math.abs(sensor.temp_ds2 - sensor.target_temp) <= 1 ? "ok" : "warn"}
-          />
-        </View>
 
-        {/* Sensor Cards Row 2 */}
-        <View style={styles.cardRow}>
-          <SensorCard
-            icon="wind"
-            label="SHT31"
-            value={sensor.temp_sht.toFixed(1)}
-            unit="°C"
-            color={colors.fanColor}
-            status="ok"
-          />
-          <SensorCard
-            icon="layers"
-            label="Posisi Rak"
-            value={status.tray_position || (status.tray_tilted ? "Kiri" : "Kanan")}
-            unit=""
-            color={colors.accent}
-            subtitle={`Motor: ${status.motor_state}`}
-          />
-        </View>
-        {/* Sensor Cards — hanya tampil ketika terhubung */}
+        {/* Sensor cards + device status — hanya tampil ketika terhubung */}
         {isConnected ? (
           <>
             <View style={styles.cardRow}>
