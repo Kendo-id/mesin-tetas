@@ -20,8 +20,12 @@ import {
 
   SplashScreen.preventAutoHideAsync();
 
-  // Register widget task handler at module level (runs as Android headless task)
-  registerWidgetTaskHandler(widgetTaskHandler);
+  // Register widget task handler with error boundary
+  try {
+    registerWidgetTaskHandler(widgetTaskHandler);
+  } catch (error) {
+    console.warn('Failed to register widget task handler:', error);
+  }
 
   const queryClient = new QueryClient();
 
