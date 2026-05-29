@@ -77,7 +77,7 @@ export default function RootLayout() {
           }),
           requestWidgetUpdate({
             widgetName: 'IncubationWidget',
-            renderWidget: () => <IncubationWidget session={null} />,
+            renderWidget: () => <IncubationWidget incubation={null} sensor={null} />,
             widgetNotFound: () => {},
           }),
         ]);
