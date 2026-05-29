@@ -423,7 +423,7 @@ export default function AIScreen() {
   // restores it when in chat mode. No headerShown override needed (set globally).
   const tabBarOptions = isCallMode
     ? { tabBarStyle: { display: "none" as const } }
-    : { tabBarStyle: undefined };
+    : {};
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CALL SCREEN
@@ -697,3 +697,4 @@ const s = StyleSheet.create({
   textInput: { flex: 1, borderRadius: 12, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14, maxHeight: 100 },
   sendBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
 });
+
