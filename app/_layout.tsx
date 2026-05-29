@@ -11,12 +11,15 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { registerWidgetTaskHandler } from "react-native-android-widget";
+import { registerWidgetTaskHandler, requestWidgetUpdate } from "react-native-android-widget";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { IncubatorProvider } from "@/context/IncubatorContext";
 import { widgetTaskHandler } from "@/widgets/widgetTaskHandler";
+import { TemperatureWidget } from "@/widgets/TemperatureWidget";
+import { HumidityWidget } from "@/widgets/HumidityWidget";
+import { IncubationWidget } from "@/widgets/IncubationWidget";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -54,21 +57,52 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // Update widgets from foreground when app starts.
+  // This bypasses background task limitations — widget will show content
+  // whenever user opens the app, even if background updates don't work.
+  useEffect(() => {
+    if (!fontsLoaded && !fontError) return;
+    const timer = setTimeout(async () => {
+      try {
+        await Promise.allSettled([
+          requestWidgetUpdate({
+            widgetName: 'TemperatureWidget',
+            renderWidget: () => <TemperatureWidget sensor={null} />,
+            widgetNotFound: () => {},
+          }),
+          requestWidgetUpdate({
+            widgetName: 'HumidityWidget',
+            renderWidget: () => <HumidityWidget sensor={null} />,
+            widgetNotFound: () => {},
+          }),
+          requestWidgetUpdate({
+            widgetName: 'IncubationWidget',
+            renderWidget: () => <IncubationWidget session={null} />,
+            widgetNotFound: () => {},
+          }),
+        ]);
+      } catch (e) {
+        console.warn('Widget foreground update:', e);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [fontsLoaded, fontError]);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <IncubatorProvider>
-            <GestureHandlerRootView>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <IncubatorProvider>
               <KeyboardProvider>
                 <RootLayoutNav />
               </KeyboardProvider>
-            </GestureHandlerRootView>
-          </IncubatorProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
+            </IncubatorProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </GestureHandlerRootView>
     </SafeAreaProvider>
   );
 }
