@@ -419,21 +419,21 @@ export default function AIScreen() {
       ? "Tunggu giliran Anda..."
       : "Menyiapkan sesi...";
 
+  // Single <Tabs.Screen> always rendered — hides tab bar when in call mode,
+  // restores it when in chat mode. No headerShown override needed (set globally).
+  const tabBarOptions = isCallMode
+    ? { tabBarStyle: { display: "none" as const } }
+    : { tabBarStyle: undefined };
+
   // ═══════════════════════════════════════════════════════════════════════════
-  // CALL SCREEN — tab bar hidden via <Tabs.Screen options> (expo-router native way)
+  // CALL SCREEN
   // ═══════════════════════════════════════════════════════════════════════════
   if (isCallMode) {
     return (
       <View style={[s.callRoot, { backgroundColor: BG }]}>
-        {/*
-          CRITICAL FIX: <Tabs.Screen> with display:"none" tells the parent tab navigator
-          to hide the tab bar. This is the ONLY reliable way in expo-router.
-          navigation.getParent().setOptions() does NOT work reliably in expo-router v3+.
-        */}
-        <Tabs.Screen options={{ tabBarStyle: { display: "none" }, headerShown: false }} />
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <Tabs.Screen options={tabBarOptions} />
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-        {/* Top bar — minimal */}
         <View style={[s.callTopBar, { paddingTop: topPad + 8 }]}>
           <View style={[s.callBadge, { backgroundColor: "#EF444418", borderColor: "#EF444440" }]}>
             <View style={[s.callBadgeDot, { backgroundColor: "#EF4444" }]} />
@@ -445,7 +445,6 @@ export default function AIScreen() {
           </Pressable>
         </View>
 
-        {/* Orb area — centered */}
         <View style={s.callOrbArea}>
           <View style={s.orbWrapper}>
             <Animated.View style={[s.glowRing, { borderColor: callOrbColor + "20", transform: [{ scale: glowAnim }] }]} />
@@ -454,11 +453,9 @@ export default function AIScreen() {
               <Text style={[s.orbLetter, { color: callOrbColor }]}>T</Text>
             </Animated.View>
           </View>
-
           <Text style={[s.callName, { color: TXT }]}>TERRA</Text>
           <Text style={[s.callSubtitle, { color: TXT2 }]}>AI Inkubator</Text>
           <Text style={[s.callStatus, { color: callOrbColor }]}>{callStatusLabel}</Text>
-
           {voiceState === "recording" && (
             <View style={[s.cdTrack, { backgroundColor: BD }]}>
               <Animated.View style={[s.cdFill, {
@@ -467,7 +464,6 @@ export default function AIScreen() {
               }]} />
             </View>
           )}
-
           {!!callTranscript && (
             <View style={[s.transcriptBox, { backgroundColor: SURF, borderColor: BD }]}>
               <Text style={[s.transcriptLbl, { color: TXT2 }]}>Anda:</Text>
@@ -476,7 +472,6 @@ export default function AIScreen() {
           )}
         </View>
 
-        {/* Bottom — end call button, padded well above navigation bar */}
         <View style={[s.callBottom, { paddingBottom: Math.max(insets.bottom + 36, 60) }]}>
           <Text style={[s.callHint, { color: TXT2 }]}>{callHintLabel}</Text>
           <Pressable onPress={toggleCall} style={({ pressed }) => [s.endBtn, { opacity: pressed ? 0.8 : 1 }]}>
@@ -489,14 +484,15 @@ export default function AIScreen() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CHAT SCREEN — restore tab bar
+  // CHAT SCREEN
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <View style={[s.root, { backgroundColor: BG }]}>
-      <Tabs.Screen options={{ tabBarStyle: undefined, headerShown: false }} />
-      <StatusBar barStyle="light-content" backgroundColor={SURF} />
+      <Tabs.Screen options={tabBarOptions} />
+      {/* Use BG (background) for status bar — avoids card color mismatch on some devices */}
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* HEADER */}
+      {/* HEADER — explicit BG color to prevent white flash */}
       <View style={[s.header, { paddingTop: topPad + 8, backgroundColor: SURF, borderBottomColor: BD }]}>
         <View style={[s.hdrPill, { backgroundColor: C.muted, borderColor: BD }]}>
           <View style={[s.hdrDot, { backgroundColor: A }]} />
