@@ -149,10 +149,18 @@ function makeIncubationLayout() {
 
 // ─── AppWidget Info XMLs ──────────────────────────────────────────────────────
 
-function makeWidgetInfo(layoutName, minWidth, minHeight, cellW, cellH, description) {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="${minWidth}dp"
+function makeWidgetInfo(layoutName, minWidth, minHeight, cellW, cellH) {
+    return `<?xml version="1.0" encoding="utf-8"?>
+  <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+      android:minWidth="${minWidth}dp"
+      android:minHeight="${minHeight}dp"
+      android:targetCellWidth="${cellW}"
+      android:targetCellHeight="${cellH}"
+      android:updatePeriodMillis="1800000"
+      android:initialLayout="@layout/${layoutName}"
+      android:resizeMode="horizontal|vertical"
+      android:widgetCategory="home_screen"/>`;
+  }dp"
     android:minHeight="${minHeight}dp"
     android:targetCellWidth="${cellW}"
     android:targetCellHeight="${cellH}"
@@ -398,11 +406,11 @@ const withAndroidNativeWidget = (config, options = {}) => {
 
       // AppWidget Info XMLs
       writeFile(path.join(xmlDir, 'tb_info_temperature.xml'),
-        makeWidgetInfo('tb_widget_temperature', 180, 110, 4, 2, 'Monitor suhu TerraBreed'));
+        makeWidgetInfo('tb_widget_temperature', 180, 110, 4, 2));
       writeFile(path.join(xmlDir, 'tb_info_humidity.xml'),
-        makeWidgetInfo('tb_widget_humidity', 180, 110, 4, 2, 'Monitor kelembapan TerraBreed'));
+        makeWidgetInfo('tb_widget_humidity', 180, 110, 4, 2));
       writeFile(path.join(xmlDir, 'tb_info_incubation.xml'),
-        makeWidgetInfo('tb_widget_incubation', 250, 80, 5, 2, 'Status sesi inkubasi'));
+        makeWidgetInfo('tb_widget_incubation', 250, 80, 5, 2));
 
       // Kotlin sources
       writeFile(path.join(srcDir, 'TbWidgetApi.kt'),           makeKotlinHelper(pkg, serverUrl));
