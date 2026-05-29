@@ -1,7 +1,6 @@
 /**
    * withAndroidNativeWidget.js
    * Custom Expo Config Plugin: generate native Android AppWidget (Kotlin + XML).
-   * Widget murni native — fetch Flask API tanpa JS bridge.
    */
   const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
   const fs   = require('fs');
@@ -10,7 +9,7 @@
   function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
   function writeFile(p, c) { ensureDir(path.dirname(p)); fs.writeFileSync(p, c, 'utf8'); }
 
-  // ── Background drawable: semi-transparan + sudut halus ────────────────────────
+  // ── Background drawable: semi-transparan 70% + sudut halus 16dp ──────────────
 
   function makeWidgetBg() {
     return `<?xml version="1.0" encoding="utf-8"?>
@@ -61,7 +60,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:text="TerraBreed"
-          android:textColor="#33475B"
+          android:textColor="#334155"
           android:textSize="9sp"
           android:layout_marginTop="2dp"/>
   </LinearLayout>`;
@@ -105,7 +104,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:text="TerraBreed"
-          android:textColor="#33475B"
+          android:textColor="#334155"
           android:textSize="9sp"
           android:layout_marginTop="2dp"/>
   </LinearLayout>`;
@@ -171,7 +170,7 @@
       android:widgetCategory="home_screen"/>`;
   }
 
-  // ── Kotlin Helper (goAsync fix + robust JSON parsing) ─────────────────────────
+  // ── Kotlin Helper ─────────────────────────────────────────────────────────────
 
   function makeKotlinHelper(pkg, serverUrl) {
     return `package ${pkg}
@@ -203,80 +202,61 @@
           val species: String?, val temperature: Double?, val humidity: Double?
       )
 
-      /** Ambil nilai double dari berbagai kemungkinan key nama. */
       private fun JSONObject.getTemp(): Double? {
           for (k in listOf("temp", "temperature", "suhu")) {
-              if (has(k)) {
-                  val v = optDouble(k)
-                  if (!v.isNaN()) return v
-              }
+              if (has(k)) { val v = optDouble(k); if (!v.isNaN()) return v }
           }
           return null
       }
 
       private fun JSONObject.getHumid(): Double? {
           for (k in listOf("humidity", "lembab", "humid")) {
-              if (has(k)) {
-                  val v = optDouble(k)
-                  if (!v.isNaN()) return v
-              }
+              if (has(k)) { val v = optDouble(k); if (!v.isNaN()) return v }
           }
           return null
       }
 
-      fun fetchSensor(ctx: Context): SensorData? {
-          return try {
-              val url  = getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest"
-              val conn = URL(url).openConnection() as HttpURLConnection
-              conn.connectTimeout = 8000
-              conn.readTimeout    = 8000
-              conn.requestMethod  = "GET"
-              conn.setRequestProperty("Accept", "application/json")
-              val responseCode = conn.responseCode
-              if (responseCode != 200) return null
-              val body = InputStreamReader(conn.inputStream).readText()
-              conn.disconnect()
-              val root   = JSONObject(body)
-              // Coba {"sensor": {...}} dulu, lalu {"data": {...}}, lalu root langsung
-              val obj = root.optJSONObject("sensor")
-                  ?: root.optJSONObject("data")
-                  ?: root
-              SensorData(obj.getTemp(), obj.getHumid())
-          } catch (e: Exception) {
-              null
-          }
-      }
+      fun fetchSensor(ctx: Context): SensorData? = try {
+          val conn = URL(getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest")
+              .openConnection() as HttpURLConnection
+          conn.connectTimeout = 8000
+          conn.readTimeout    = 8000
+          conn.requestMethod  = "GET"
+          conn.setRequestProperty("Accept", "application/json")
+          if (conn.responseCode != 200) { conn.disconnect(); return null }
+          val body = InputStreamReader(conn.inputStream).readText()
+          conn.disconnect()
+          val root = JSONObject(body)
+          val obj  = root.optJSONObject("sensor") ?: root.optJSONObject("data") ?: root
+          SensorData(obj.getTemp(), obj.getHumid())
+      } catch (e: Exception) { null }
 
-      fun fetchIncubation(ctx: Context): IncubationData? {
-          return try {
-              val url  = getServerUrl(ctx).trimEnd('/') + "/api/incubation/current"
-              val conn = URL(url).openConnection() as HttpURLConnection
-              conn.connectTimeout = 8000
-              conn.readTimeout    = 8000
-              conn.requestMethod  = "GET"
-              conn.setRequestProperty("Accept", "application/json")
-              if (conn.responseCode != 200) return null
-              val body    = InputStreamReader(conn.inputStream).readText()
-              conn.disconnect()
-              val root    = JSONObject(body)
-              val session = root.optJSONObject("session") ?: return null
-              val sensor  = fetchSensor(ctx)
-              IncubationData(
-                  dayNumber   = session.optInt("day_number").takeIf { session.has("day_number") },
-                  totalDays   = session.optInt("total_days").takeIf { session.has("total_days") },
-                  species     = session.optString("species", "TerraBreed"),
-                  temperature = sensor?.temperature,
-                  humidity    = sensor?.humidity
-              )
-          } catch (e: Exception) {
-              null
-          }
-      }
+      fun fetchIncubation(ctx: Context): IncubationData? = try {
+          val conn = URL(getServerUrl(ctx).trimEnd('/') + "/api/incubation/current")
+              .openConnection() as HttpURLConnection
+          conn.connectTimeout = 8000
+          conn.readTimeout    = 8000
+          conn.requestMethod  = "GET"
+          conn.setRequestProperty("Accept", "application/json")
+          if (conn.responseCode != 200) { conn.disconnect(); return null }
+          val body    = InputStreamReader(conn.inputStream).readText()
+          conn.disconnect()
+          val root    = JSONObject(body)
+          val session = root.optJSONObject("session") ?: return null
+          val sensor  = fetchSensor(ctx)
+          IncubationData(
+              dayNumber   = session.optInt("day_number").takeIf { session.has("day_number") },
+              totalDays   = session.optInt("total_days").takeIf { session.has("total_days") },
+              species     = session.optString("species", "TerraBreed"),
+              temperature = sensor?.temperature,
+              humidity    = sensor?.humidity
+          )
+      } catch (e: Exception) { null }
   }
   `;
   }
 
-  // ── Kotlin Providers (pakai goAsync agar thread tidak dibunuh OS) ─────────────
+  // ── Kotlin Providers (goAsync dipanggil di onUpdate, bukan companion object) ──
 
   function makeTempProvider(pkg) {
     return `package ${pkg}
@@ -288,12 +268,9 @@
 
   class TbTempWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-          for (id in ids) update(ctx, mgr, id)
-      }
-      companion object {
-          fun update(ctx: Context, mgr: AppWidgetManager, id: Int) {
+          for (id in ids) {
+              val pending = goAsync()
               val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_temperature)
-              val pending = goAsync()  // Cegah proses dibunuh sebelum thread selesai
               Thread {
                   try {
                       val data = TbWidgetApi.fetchSensor(ctx)
@@ -322,12 +299,9 @@
 
   class TbHumidWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-          for (id in ids) update(ctx, mgr, id)
-      }
-      companion object {
-          fun update(ctx: Context, mgr: AppWidgetManager, id: Int) {
-              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_humidity)
+          for (id in ids) {
               val pending = goAsync()
+              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_humidity)
               Thread {
                   try {
                       val data = TbWidgetApi.fetchSensor(ctx)
@@ -356,12 +330,9 @@
 
   class TbIncubWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-          for (id in ids) update(ctx, mgr, id)
-      }
-      companion object {
-          fun update(ctx: Context, mgr: AppWidgetManager, id: Int) {
-              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_incubation)
+          for (id in ids) {
               val pending = goAsync()
+              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_incubation)
               Thread {
                   try {
                       val data = TbWidgetApi.fetchIncubation(ctx)
@@ -414,25 +385,17 @@
       const resDir = path.join(root, 'app', 'src', 'main', 'res');
       const srcDir = path.join(root, 'app', 'src', 'main', 'java', pkgDir);
 
-      // Background drawable
       writeFile(path.join(resDir, 'drawable', 'tb_widget_bg.xml'), makeWidgetBg());
-
-      // Layout XMLs
       writeFile(path.join(resDir, 'layout', 'tb_widget_temperature.xml'), makeTemperatureLayout());
       writeFile(path.join(resDir, 'layout', 'tb_widget_humidity.xml'),    makeHumidityLayout());
       writeFile(path.join(resDir, 'layout', 'tb_widget_incubation.xml'),  makeIncubationLayout());
-
-      // AppWidget info XMLs
       writeFile(path.join(resDir, 'xml', 'tb_info_temperature.xml'), makeWidgetInfo('tb_widget_temperature', 180, 110, 4, 2));
       writeFile(path.join(resDir, 'xml', 'tb_info_humidity.xml'),    makeWidgetInfo('tb_widget_humidity', 180, 110, 4, 2));
       writeFile(path.join(resDir, 'xml', 'tb_info_incubation.xml'),  makeWidgetInfo('tb_widget_incubation', 250, 80, 5, 2));
-
-      // Kotlin sources
       writeFile(path.join(srcDir, 'TbWidgetApi.kt'),           makeKotlinHelper(pkg, serverUrl));
       writeFile(path.join(srcDir, 'TbTempWidgetProvider.kt'),  makeTempProvider(pkg));
       writeFile(path.join(srcDir, 'TbHumidWidgetProvider.kt'), makeHumidProvider(pkg));
       writeFile(path.join(srcDir, 'TbIncubWidgetProvider.kt'), makeIncubProvider(pkg));
-
       return cfg;
     }]);
 
