@@ -13,14 +13,13 @@ const widgetTaskHandler: WidgetTaskHandler = async ({
 
   const name = widgetInfo.widgetName as string;
 
-  // DIAGNOSTIC: static-only render, zero async, zero network
-  // If widget is still blank after this, issue is in native/bundle layer
   if (name === 'TemperatureWidget') {
     renderWidget(<TemperatureWidget sensor={null} />);
   } else if (name === 'HumidityWidget') {
     renderWidget(<HumidityWidget sensor={null} />);
   } else if (name === 'IncubationWidget') {
-    renderWidget(<IncubationWidget session={null} />);
+    // IncubationWidget expects { incubation, sensor } not session
+    renderWidget(<IncubationWidget incubation={null} sensor={null} />);
   }
 };
 
