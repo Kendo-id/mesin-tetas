@@ -18,7 +18,6 @@ const widgetTaskHandler: WidgetTaskHandler = async ({
   } else if (name === 'HumidityWidget') {
     renderWidget(<HumidityWidget sensor={null} />);
   } else if (name === 'IncubationWidget') {
-    // IncubationWidget expects { incubation, sensor } not session
     renderWidget(<IncubationWidget incubation={null} sensor={null} />);
   }
 };
