@@ -18,9 +18,9 @@
 
   const TB_AI_INPUT_BG = `<?xml version="1.0" encoding="utf-8"?>
   <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-      <solid android:color="#1A1E293B"/>
-      <corners android:radius="10dp"/>
-      <stroke android:width="1dp" android:color="#1E293B"/>
+      <solid android:color="#FF1E293B"/>
+      <corners android:radius="21dp"/>
+      <stroke android:width="1dp" android:color="#334155"/>
   </shape>`;
 
   const TB_MIC_BTN_BG = `<?xml version="1.0" encoding="utf-8"?>
@@ -34,23 +34,27 @@
   <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
       android:layout_width="match_parent" android:layout_height="match_parent"
       android:orientation="vertical" android:background="@drawable/tb_widget_bg"
-      android:paddingStart="18dp" android:paddingEnd="18dp"
-      android:paddingTop="14dp"   android:paddingBottom="14dp"
+      android:paddingStart="14dp" android:paddingEnd="14dp"
+      android:paddingTop="8dp"   android:paddingBottom="8dp"
       android:gravity="center_vertical">
       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-          android:text="SUHU" android:textColor="#64748B" android:textSize="10sp"
+          android:text="SUHU" android:textColor="#64748B" android:textSize="9sp"
           android:letterSpacing="0.08"/>
-      <TextView android:id="@+id/tb_temp_value"
-          android:layout_width="wrap_content" android:layout_height="wrap_content"
-          android:text="--\u00B0C" android:textColor="#F59E0B"
-          android:textSize="38sp" android:textStyle="bold"/>
-      <TextView android:id="@+id/tb_humid_sub"
-          android:layout_width="wrap_content" android:layout_height="wrap_content"
-          android:text="Lembab: --%"
-          android:textColor="#94A3B8" android:textSize="11sp"/>
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="horizontal" android:gravity="center_vertical">
+          <TextView android:id="@+id/tb_temp_value"
+              android:layout_width="wrap_content" android:layout_height="wrap_content"
+              android:text="--\\u00B0C" android:textColor="#F59E0B"
+              android:textSize="24sp" android:textStyle="bold"/>
+          <TextView android:id="@+id/tb_humid_sub"
+              android:layout_width="wrap_content" android:layout_height="wrap_content"
+              android:text="  --%"
+              android:textColor="#94A3B8" android:textSize="11sp"
+              android:layout_marginStart="4dp"/>
+      </LinearLayout>
       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-          android:text="TerraBreed" android:textColor="#334155" android:textSize="9sp"
-          android:layout_marginTop="2dp"/>
+          android:text="TerraBreed" android:textColor="#334155" android:textSize="8sp"
+          android:layout_marginTop="1dp"/>
   </LinearLayout>`;
   }
 
@@ -108,52 +112,41 @@
     return `<?xml version="1.0" encoding="utf-8"?>
   <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
       android:layout_width="match_parent" android:layout_height="match_parent"
-      android:orientation="vertical" android:background="@drawable/tb_widget_bg"
-      android:paddingStart="16dp" android:paddingEnd="16dp"
-      android:paddingTop="12dp"   android:paddingBottom="12dp"
+      android:orientation="horizontal"
+      android:background="@drawable/tb_widget_bg"
+      android:paddingStart="10dp" android:paddingEnd="10dp"
+      android:paddingTop="10dp" android:paddingBottom="10dp"
       android:gravity="center_vertical">
 
-      <!-- Header -->
-      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-          android:orientation="horizontal" android:gravity="center_vertical"
-          android:layout_marginBottom="10dp">
+      <!-- Search bar (tap -> chat) -->
+      <LinearLayout android:id="@+id/tb_ai_input"
+          android:layout_width="0dp" android:layout_height="42dp"
+          android:layout_weight="1"
+          android:background="@drawable/tb_ai_input_bg"
+          android:orientation="horizontal"
+          android:gravity="center_vertical"
+          android:paddingStart="12dp" android:paddingEnd="8dp"
+          android:layout_marginEnd="8dp">
           <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-              android:text="\u2728" android:textColor="#F59E0B" android:textSize="12sp"/>
-          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-              android:text="  TERRA AI" android:textColor="#94A3B8" android:textSize="10sp"
-              android:letterSpacing="0.08"/>
-      </LinearLayout>
-
-      <!-- Input row: text placeholder + mic button -->
-      <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
-          android:orientation="horizontal" android:gravity="center_vertical">
-
-          <!-- Tap -> buka AI chat -->
-          <TextView android:id="@+id/tb_ai_input"
-              android:layout_width="0dp" android:layout_height="match_parent"
+              android:text="\\u2728" android:textColor="#F59E0B" android:textSize="12sp"
+              android:layout_marginEnd="6dp"/>
+          <TextView android:layout_width="0dp" android:layout_height="wrap_content"
               android:layout_weight="1"
-              android:background="@drawable/tb_ai_input_bg"
               android:text="Tanya TERRA AI..."
               android:textColor="#64748B" android:textSize="13sp"
-              android:paddingStart="12dp" android:paddingEnd="8dp"
-              android:gravity="center_vertical"
-              android:layout_marginEnd="8dp"/>
-
-          <!-- Tap -> buka AI voice call -->
-          <TextView android:id="@+id/tb_ai_mic"
-              android:layout_width="44dp" android:layout_height="44dp"
-              android:background="@drawable/tb_mic_btn_bg"
-              android:text="\uD83C\uDFA4"
-              android:textSize="20sp"
-              android:gravity="center"/>
+              android:singleLine="true"/>
       </LinearLayout>
 
-      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-          android:text="Tap teks untuk chat  \u00B7  mic untuk suara"
-          android:textColor="#334155" android:textSize="9sp"
-          android:layout_marginTop="6dp"/>
+      <!-- Mic button (tap -> voice call) -->
+      <TextView android:id="@+id/tb_ai_mic"
+          android:layout_width="42dp" android:layout_height="42dp"
+          android:background="@drawable/tb_mic_btn_bg"
+          android:text="\\uD83C\\uDFA4"
+          android:textSize="18sp"
+          android:gravity="center"/>
   </LinearLayout>`;
   }
+
 
   // ── AppWidget info XMLs ───────────────────────────────────────────────────────
   function widgetInfo(layout, minW, minH, cellW, cellH) {
@@ -314,7 +307,7 @@
               Thread { try {
                   val d = TbWidgetApi.fetchSensor(ctx)
                   v.setTextViewText(R.id.tb_temp_value,  d?.temperature?.let { "%.1f\u00B0C".format(it) } ?: "--\u00B0C")
-                  v.setTextViewText(R.id.tb_humid_sub,   d?.humidity?.let    { "Lembab: %.0f%%".format(it) } ?: "Lembab: --%")
+                  v.setTextViewText(R.id.tb_humid_sub,   d?.humidity?.let    { "  %.0f%%".format(it) } ?: "  --%")
                   mgr.updateAppWidget(id, v)
               } finally { p.finish() } }.start()
           }
@@ -432,10 +425,10 @@
       writeFile(path.join(res, 'layout', 'tb_widget_incubation.xml'),  layoutIncubation());
       writeFile(path.join(res, 'layout', 'tb_widget_ai.xml'),          layoutAi());
       // AppWidget info
-      writeFile(path.join(res, 'xml', 'tb_info_temperature.xml'), widgetInfo('tb_widget_temperature', 180, 110, 4, 2));
+      writeFile(path.join(res, 'xml', 'tb_info_temperature.xml'), widgetInfo('tb_widget_temperature', 140, 70, 3, 1));
       writeFile(path.join(res, 'xml', 'tb_info_humidity.xml'),    widgetInfo('tb_widget_humidity',    180, 110, 4, 2));
       writeFile(path.join(res, 'xml', 'tb_info_incubation.xml'),  widgetInfo('tb_widget_incubation',  250,  80, 5, 2));
-      writeFile(path.join(res, 'xml', 'tb_info_ai.xml'),          widgetInfo('tb_widget_ai',          250,  80, 5, 2));
+      writeFile(path.join(res, 'xml', 'tb_info_ai.xml'),          widgetInfo('tb_widget_ai',          250,  62, 5, 1));
       // Kotlin sources
       writeFile(path.join(src, 'TbWidgetApi.kt'),           ktApi(pkg, serverUrl));
       writeFile(path.join(src, 'TbTempWidgetProvider.kt'),  ktTemp(pkg));
