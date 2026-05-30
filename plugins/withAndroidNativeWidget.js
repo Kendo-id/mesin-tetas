@@ -1,11 +1,6 @@
 /**
-   * withAndroidNativeWidget.js
-   * Custom Expo Config Plugin: generate native Android AppWidget (Kotlin + XML).
-   *
-   * Fix SSL: widget pakai TrustAll SSLContext (sama seperti SSLBypassOkHttpFactory)
-   *          karena HttpURLConnection tidak otomatis pakai OkHttp trust config.
-   * Fix URL : baca server URL dari AsyncStorage SQLite (key "server_base_url"),
-   *           fallback ke SharedPreferences, fallback ke hardcoded default.
+   * withAndroidNativeWidget.js — TerraBreed homescreen widgets
+   * Widgets: Suhu, Kelembapan, Inkubasi, TERRA AI
    */
   const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
   const fs   = require('fs');
@@ -14,26 +9,33 @@
   function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
   function writeFile(p, c) { ensureDir(path.dirname(p)); fs.writeFileSync(p, c, 'utf8'); }
 
-  // ── Background drawable ───────────────────────────────────────────────────────
-  function makeWidgetBg() {
-    return `<?xml version="1.0" encoding="utf-8"?>
-  <shape xmlns:android="http://schemas.android.com/apk/res/android"
-      android:shape="rectangle">
+  // ── Drawables ─────────────────────────────────────────────────────────────────
+  const TB_WIDGET_BG = `<?xml version="1.0" encoding="utf-8"?>
+  <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
       <solid android:color="#B30F172A"/>
       <corners android:radius="16dp"/>
   </shape>`;
-  }
 
-  // ── Layout XMLs ───────────────────────────────────────────────────────────────
-  function makeTemperatureLayout() {
+  const TB_AI_INPUT_BG = `<?xml version="1.0" encoding="utf-8"?>
+  <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+      <solid android:color="#1A1E293B"/>
+      <corners android:radius="10dp"/>
+      <stroke android:width="1dp" android:color="#1E293B"/>
+  </shape>`;
+
+  const TB_MIC_BTN_BG = `<?xml version="1.0" encoding="utf-8"?>
+  <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+      <solid android:color="#F59E0B"/>
+  </shape>`;
+
+  // ── Layouts ───────────────────────────────────────────────────────────────────
+  function layoutTemperature() {
     return `<?xml version="1.0" encoding="utf-8"?>
   <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent"
-      android:orientation="vertical"
-      android:background="@drawable/tb_widget_bg"
+      android:layout_width="match_parent" android:layout_height="match_parent"
+      android:orientation="vertical" android:background="@drawable/tb_widget_bg"
       android:paddingStart="18dp" android:paddingEnd="18dp"
-      android:paddingTop="14dp"  android:paddingBottom="14dp"
+      android:paddingTop="14dp"   android:paddingBottom="14dp"
       android:gravity="center_vertical">
       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
           android:text="SUHU" android:textColor="#64748B" android:textSize="10sp"
@@ -52,15 +54,13 @@
   </LinearLayout>`;
   }
 
-  function makeHumidityLayout() {
+  function layoutHumidity() {
     return `<?xml version="1.0" encoding="utf-8"?>
   <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent"
-      android:orientation="vertical"
-      android:background="@drawable/tb_widget_bg"
+      android:layout_width="match_parent" android:layout_height="match_parent"
+      android:orientation="vertical" android:background="@drawable/tb_widget_bg"
       android:paddingStart="18dp" android:paddingEnd="18dp"
-      android:paddingTop="14dp"  android:paddingBottom="14dp"
+      android:paddingTop="14dp"   android:paddingBottom="14dp"
       android:gravity="center_vertical">
       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
           android:text="KELEMBAPAN" android:textColor="#64748B" android:textSize="10sp"
@@ -79,15 +79,13 @@
   </LinearLayout>`;
   }
 
-  function makeIncubationLayout() {
+  function layoutIncubation() {
     return `<?xml version="1.0" encoding="utf-8"?>
   <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent"
-      android:orientation="vertical"
-      android:background="@drawable/tb_widget_bg"
+      android:layout_width="match_parent" android:layout_height="match_parent"
+      android:orientation="vertical" android:background="@drawable/tb_widget_bg"
       android:paddingStart="18dp" android:paddingEnd="18dp"
-      android:paddingTop="14dp"  android:paddingBottom="14dp"
+      android:paddingTop="14dp"   android:paddingBottom="14dp"
       android:gravity="center_vertical">
       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
           android:text="INKUBASI" android:textColor="#64748B" android:textSize="10sp"
@@ -106,22 +104,71 @@
   </LinearLayout>`;
   }
 
-  function makeWidgetInfo(layoutName, minWidth, minHeight, cellW, cellH) {
+  function layoutAi() {
+    return `<?xml version="1.0" encoding="utf-8"?>
+  <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+      android:layout_width="match_parent" android:layout_height="match_parent"
+      android:orientation="vertical" android:background="@drawable/tb_widget_bg"
+      android:paddingStart="16dp" android:paddingEnd="16dp"
+      android:paddingTop="12dp"   android:paddingBottom="12dp"
+      android:gravity="center_vertical">
+
+      <!-- Header -->
+      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+          android:orientation="horizontal" android:gravity="center_vertical"
+          android:layout_marginBottom="10dp">
+          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+              android:text="\u2728" android:textColor="#F59E0B" android:textSize="12sp"/>
+          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+              android:text="  TERRA AI" android:textColor="#94A3B8" android:textSize="10sp"
+              android:letterSpacing="0.08"/>
+      </LinearLayout>
+
+      <!-- Input row: text area + mic button -->
+      <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
+          android:orientation="horizontal" android:gravity="center_vertical">
+
+          <!-- Text input placeholder — klik buka AI chat -->
+          <TextView android:id="@+id/tb_ai_input"
+              android:layout_width="0dp" android:layout_height="match_parent"
+              android:layout_weight="1"
+              android:background="@drawable/tb_ai_input_bg"
+              android:text="Tanya TERRA AI..."
+              android:textColor="#64748B" android:textSize="13sp"
+              android:paddingStart="12dp" android:paddingEnd="8dp"
+              android:gravity="center_vertical"
+              android:layout_marginEnd="8dp"/>
+
+          <!-- Mic button — klik buka AI voice call -->
+          <TextView android:id="@+id/tb_ai_mic"
+              android:layout_width="44dp" android:layout_height="44dp"
+              android:background="@drawable/tb_mic_btn_bg"
+              android:text="\uD83C\uDFA4"
+              android:textSize="20sp"
+              android:gravity="center"/>
+      </LinearLayout>
+
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+          android:text="Tap teks untuk chat  \u00B7  mic untuk suara"
+          android:textColor="#334155" android:textSize="9sp"
+          android:layout_marginTop="6dp"/>
+  </LinearLayout>`;
+  }
+
+  // ── AppWidget info XMLs ───────────────────────────────────────────────────────
+  function widgetInfo(layout, minW, minH, cellW, cellH) {
     return `<?xml version="1.0" encoding="utf-8"?>
   <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-      android:minWidth="${minWidth}dp"
-      android:minHeight="${minHeight}dp"
-      android:targetCellWidth="${cellW}"
-      android:targetCellHeight="${cellH}"
+      android:minWidth="${minW}dp" android:minHeight="${minH}dp"
+      android:targetCellWidth="${cellW}" android:targetCellHeight="${cellH}"
       android:updatePeriodMillis="1800000"
-      android:initialLayout="@layout/${layoutName}"
+      android:initialLayout="@layout/${layout}"
       android:resizeMode="horizontal|vertical"
       android:widgetCategory="home_screen"/>`;
   }
 
-  // ── Kotlin Helper — TrustAll SSL + AsyncStorage URL sync ─────────────────────
-  function makeKotlinHelper(pkg, serverUrl) {
-    return `package ${pkg}
+  // ── Kotlin: TbWidgetApi ───────────────────────────────────────────────────────
+  function ktApi(pkg, serverUrl) { return `package ${pkg}
 
   import android.content.Context
   import android.database.sqlite.SQLiteDatabase
@@ -132,51 +179,36 @@
   import java.net.URL
   import java.security.SecureRandom
   import java.security.cert.X509Certificate
-  import javax.net.ssl.HostnameVerifier
-  import javax.net.ssl.HttpsURLConnection
-  import javax.net.ssl.SSLContext
-  import javax.net.ssl.TrustManager
-  import javax.net.ssl.X509TrustManager
+  import javax.net.ssl.*
 
   object TbWidgetApi {
-      private const val DEFAULT_URL  = "${serverUrl}"
-      private const val PREFS_NAME   = "TerraBreedWidget"
-      private const val KEY_URL      = "server_url"
-      /** Key yang dipakai app di AsyncStorage */
-      private const val AS_KEY       = "server_base_url"
+      private const val DEFAULT_URL = "${serverUrl}"
+      private const val PREFS_NAME  = "TerraBreedWidget"
+      private const val KEY_URL     = "server_url"
+      private const val AS_KEY      = "server_base_url"
 
-      // ── SSL TrustAll (sama seperti SSLBypassOkHttpFactory di React Native app) ──
       private val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
-          override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
-          override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+          override fun checkClientTrusted(c: Array<X509Certificate>, a: String) {}
+          override fun checkServerTrusted(c: Array<X509Certificate>, a: String) {}
           override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
       })
       private val sslCtx: SSLContext by lazy {
           SSLContext.getInstance("TLS").also { it.init(null, trustAll, SecureRandom()) }
       }
-      private val trustAllVerifier = HostnameVerifier { _, _ -> true }
+      private val allVerifier = HostnameVerifier { _, _ -> true }
 
-      // ── Baca URL dari AsyncStorage SQLite (prioritas tertinggi) ──────────────
       private fun readUrlFromAsyncStorage(ctx: Context): String? {
-          // AsyncStorage v2 menyimpan di SQLite — coba berbagai nama database
-          val dbNames = listOf("AsyncStorage", "RKStorage", "default", "asyncstorage")
-          val dbDir   = File(ctx.applicationInfo.dataDir, "databases")
-          for (name in dbNames) {
-              val dbFile = File(dbDir, name)
-              if (!dbFile.exists()) continue
+          val dbDir  = File(ctx.applicationInfo.dataDir, "databases")
+          for (name in listOf("AsyncStorage", "RKStorage", "default", "asyncstorage")) {
+              val f = File(dbDir, name); if (!f.exists()) continue
               try {
-                  val db = SQLiteDatabase.openDatabase(dbFile.path, null,
-                      SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS)
-                  db.use { d ->
-                      // Coba tabel catalystLocalStorage atau AsyncStorage
+                  SQLiteDatabase.openDatabase(f.path, null,
+                      SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS).use { db ->
                       for (tbl in listOf("catalystLocalStorage", "AsyncStorage", "keyvalue")) {
                           try {
-                              d.rawQuery(
-                                  "SELECT value FROM \$tbl WHERE key=?",
-                                  arrayOf(AS_KEY)
-                              ).use { cursor ->
-                                  if (cursor.moveToFirst()) {
-                                      val v = cursor.getString(0)
+                              db.rawQuery("SELECT value FROM \$tbl WHERE key=?", arrayOf(AS_KEY)).use { c ->
+                                  if (c.moveToFirst()) {
+                                      val v = c.getString(0)
                                       if (!v.isNullOrBlank()) return v.trim('"').trimEnd('/')
                                   }
                               }
@@ -185,197 +217,174 @@
                   }
               } catch (_: Exception) {}
           }
-          // Fallback: AsyncStorage v1 pakai SharedPreferences "RCTDefaultPreferences"
           val legacy = ctx.getSharedPreferences("RCTDefaultPreferences", Context.MODE_PRIVATE)
-          val v = legacy.getString(AS_KEY, null)
-          if (!v.isNullOrBlank()) return v.trimEnd('/')
-          return null
+          return legacy.getString(AS_KEY, null)?.trimEnd('/')
       }
 
       fun getServerUrl(ctx: Context): String {
-          // 1. Baca dari AsyncStorage (sinkron dengan URL yang dipakai app)
-          val fromAS = runCatching { readUrlFromAsyncStorage(ctx) }.getOrNull()
-          if (!fromAS.isNullOrBlank()) return fromAS
-          // 2. Baca dari SharedPreferences widget (kalau pernah disimpan manual)
-          val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-          return prefs.getString(KEY_URL, DEFAULT_URL) ?: DEFAULT_URL
-      }
-
-      fun setServerUrl(ctx: Context, url: String) {
-          ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-              .edit().putString(KEY_URL, url.trimEnd('/')).apply()
+          return runCatching { readUrlFromAsyncStorage(ctx) }.getOrNull()?.takeIf { it.isNotBlank() }
+              ?: ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_URL, DEFAULT_URL)
+              ?: DEFAULT_URL
       }
 
       data class SensorData(val temperature: Double?, val humidity: Double?)
       data class IncubationData(
-          val dayNumber: Int?,   val totalDays: Int?,
-          val species: String?,  val temperature: Double?, val humidity: Double?
+          val dayNumber: Int?, val totalDays: Int?, val species: String?,
+          val temperature: Double?, val humidity: Double?
       )
 
       private fun JSONObject.getTemp(): Double? {
           for (k in listOf("temp", "temperature", "suhu")) {
               if (has(k)) { val v = optDouble(k); if (!v.isNaN()) return v }
-          }
-          return null
+          }; return null
       }
       private fun JSONObject.getHumid(): Double? {
           for (k in listOf("humidity", "lembab", "humid")) {
               if (has(k)) { val v = optDouble(k); if (!v.isNaN()) return v }
-          }
-          return null
+          }; return null
       }
 
-      /** Buat HttpURLConnection dengan SSL bypass (trust all certs). */
-      private fun openConn(urlStr: String, timeoutMs: Int = 8000): HttpURLConnection {
-          val conn = URL(urlStr).openConnection() as HttpURLConnection
-          conn.connectTimeout = timeoutMs
-          conn.readTimeout    = timeoutMs
-          conn.requestMethod  = "GET"
-          conn.setRequestProperty("Accept", "application/json")
-          // Bypass SSL certificate validation — sama seperti SSLBypassOkHttpFactory
-          if (conn is HttpsURLConnection) {
-              conn.sslSocketFactory = sslCtx.socketFactory
-              conn.hostnameVerifier = trustAllVerifier
-          }
-          return conn
+      private fun openConn(url: String, ms: Int = 8000): HttpURLConnection {
+          val c = URL(url).openConnection() as HttpURLConnection
+          c.connectTimeout = ms; c.readTimeout = ms
+          c.requestMethod = "GET"; c.setRequestProperty("Accept", "application/json")
+          if (c is HttpsURLConnection) { c.sslSocketFactory = sslCtx.socketFactory; c.hostnameVerifier = allVerifier }
+          return c
       }
 
       fun fetchSensor(ctx: Context): SensorData? = try {
-          val conn = openConn(getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest")
-          if (conn.responseCode != 200) { conn.disconnect(); null }
+          val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest")
+          if (c.responseCode != 200) { c.disconnect(); null }
           else {
-              val body = InputStreamReader(conn.inputStream).readText().also { conn.disconnect() }
-              val root = JSONObject(body)
+              val root = JSONObject(InputStreamReader(c.inputStream).readText().also { c.disconnect() })
               val obj  = root.optJSONObject("sensor") ?: root.optJSONObject("data") ?: root
               SensorData(obj.getTemp(), obj.getHumid())
           }
       } catch (_: Exception) { null }
 
       fun fetchIncubation(ctx: Context): IncubationData? = try {
-          val conn = openConn(getServerUrl(ctx).trimEnd('/') + "/api/incubation/current")
-          if (conn.responseCode != 200) { conn.disconnect(); null }
+          val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/incubation/current")
+          if (c.responseCode != 200) { c.disconnect(); null }
           else {
-              val body    = InputStreamReader(conn.inputStream).readText().also { conn.disconnect() }
-              val session = JSONObject(body).optJSONObject("session") ?: return null
-              val sensor  = fetchSensor(ctx)
+              val body = InputStreamReader(c.inputStream).readText().also { c.disconnect() }
+              val root = JSONObject(body)
+              // Response bisa flat {active, elapsed_days,...} atau {session:{...}}
+              val obj  = if (root.has("active")) root else (root.optJSONObject("session") ?: root)
+              if (!obj.optBoolean("active", false)) return null
+              val sensor = fetchSensor(ctx)
               IncubationData(
-                  dayNumber   = session.optInt("day_number").takeIf { session.has("day_number") },
-                  totalDays   = session.optInt("total_days").takeIf { session.has("total_days") },
-                  species     = session.optString("species", "TerraBreed"),
+                  dayNumber   = obj.optInt("elapsed_days").takeIf  { obj.has("elapsed_days") },
+                  totalDays   = obj.optInt("total_days").takeIf    { obj.has("total_days")   },
+                  species     = obj.optString("species").takeIf    { it.isNotBlank() } ?: "TerraBreed",
                   temperature = sensor?.temperature,
                   humidity    = sensor?.humidity
               )
           }
       } catch (_: Exception) { null }
   }
-  `;
-  }
+  `; }
 
   // ── Kotlin Providers ──────────────────────────────────────────────────────────
-  function makeTempProvider(pkg) {
-    return `package ${pkg}
-
-  import android.appwidget.AppWidgetManager
-  import android.appwidget.AppWidgetProvider
-  import android.content.Context
-  import android.widget.RemoteViews
-
+  function ktTemp(pkg) { return `package ${pkg}
+  import android.appwidget.AppWidgetManager; import android.appwidget.AppWidgetProvider
+  import android.content.Context; import android.widget.RemoteViews
   class TbTempWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
           for (id in ids) {
-              val pending = goAsync()
-              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_temperature)
-              Thread {
-                  try {
-                      val data = TbWidgetApi.fetchSensor(ctx)
-                      views.setTextViewText(R.id.tb_temp_value,
-                          data?.temperature?.let { "%.1f\u00B0C".format(it) } ?: "--\u00B0C")
-                      views.setTextViewText(R.id.tb_humid_sub,
-                          data?.humidity?.let { "Lembab: %.0f%%".format(it) } ?: "Lembab: --%")
-                      mgr.updateAppWidget(id, views)
-                  } finally { pending.finish() }
-              }.start()
+              val p = goAsync(); val v = RemoteViews(ctx.packageName, R.layout.tb_widget_temperature)
+              Thread { try {
+                  val d = TbWidgetApi.fetchSensor(ctx)
+                  v.setTextViewText(R.id.tb_temp_value,  d?.temperature?.let { "%.1f\u00B0C".format(it) } ?: "--\u00B0C")
+                  v.setTextViewText(R.id.tb_humid_sub,   d?.humidity?.let    { "Lembab: %.0f%%".format(it) } ?: "Lembab: --%")
+                  mgr.updateAppWidget(id, v)
+              } finally { p.finish() } }.start()
           }
       }
-  }
-  `;
-  }
+  }`; }
 
-  function makeHumidProvider(pkg) {
-    return `package ${pkg}
-
-  import android.appwidget.AppWidgetManager
-  import android.appwidget.AppWidgetProvider
-  import android.content.Context
-  import android.widget.RemoteViews
-
+  function ktHumid(pkg) { return `package ${pkg}
+  import android.appwidget.AppWidgetManager; import android.appwidget.AppWidgetProvider
+  import android.content.Context; import android.widget.RemoteViews
   class TbHumidWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
           for (id in ids) {
-              val pending = goAsync()
-              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_humidity)
-              Thread {
-                  try {
-                      val data = TbWidgetApi.fetchSensor(ctx)
-                      views.setTextViewText(R.id.tb_humid_value,
-                          data?.humidity?.let { "%.0f%%".format(it) } ?: "--%")
-                      views.setTextViewText(R.id.tb_temp_sub,
-                          data?.temperature?.let { "Suhu: %.1f\u00B0C".format(it) } ?: "Suhu: --\u00B0C")
-                      mgr.updateAppWidget(id, views)
-                  } finally { pending.finish() }
-              }.start()
+              val p = goAsync(); val v = RemoteViews(ctx.packageName, R.layout.tb_widget_humidity)
+              Thread { try {
+                  val d = TbWidgetApi.fetchSensor(ctx)
+                  v.setTextViewText(R.id.tb_humid_value, d?.humidity?.let    { "%.0f%%".format(it) }          ?: "--%")
+                  v.setTextViewText(R.id.tb_temp_sub,    d?.temperature?.let { "Suhu: %.1f\u00B0C".format(it) } ?: "Suhu: --\u00B0C")
+                  mgr.updateAppWidget(id, v)
+              } finally { p.finish() } }.start()
           }
       }
-  }
-  `;
-  }
+  }`; }
 
-  function makeIncubProvider(pkg) {
-    return `package ${pkg}
-
-  import android.appwidget.AppWidgetManager
-  import android.appwidget.AppWidgetProvider
-  import android.content.Context
-  import android.widget.RemoteViews
-
+  function ktIncub(pkg) { return `package ${pkg}
+  import android.appwidget.AppWidgetManager; import android.appwidget.AppWidgetProvider
+  import android.content.Context; import android.widget.RemoteViews
   class TbIncubWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
           for (id in ids) {
-              val pending = goAsync()
-              val views   = RemoteViews(ctx.packageName, R.layout.tb_widget_incubation)
-              Thread {
-                  try {
-                      val data = TbWidgetApi.fetchIncubation(ctx)
-                      if (data?.dayNumber != null) {
-                          views.setTextViewText(R.id.tb_incub_day,
-                              "Hari %d/%d".format(data.dayNumber, data.totalDays ?: 21))
-                          views.setTextViewText(R.id.tb_incub_species,
-                              (data.species ?: "TerraBreed").replaceFirstChar { it.uppercase() })
-                          views.setTextViewText(R.id.tb_incub_sensor,
-                              (data.temperature?.let { "%.1f\u00B0C".format(it) } ?: "--\u00B0C") +
-                              "  " + (data.humidity?.let { "%.0f%%".format(it) } ?: "--%"))
-                      } else {
-                          views.setTextViewText(R.id.tb_incub_day, "Tidak ada sesi")
-                          views.setTextViewText(R.id.tb_incub_species, "TerraBreed")
-                          views.setTextViewText(R.id.tb_incub_sensor, "")
-                      }
-                      mgr.updateAppWidget(id, views)
-                  } finally { pending.finish() }
-              }.start()
+              val p = goAsync(); val v = RemoteViews(ctx.packageName, R.layout.tb_widget_incubation)
+              Thread { try {
+                  val d = TbWidgetApi.fetchIncubation(ctx)
+                  if (d?.dayNumber != null) {
+                      v.setTextViewText(R.id.tb_incub_day,     "Hari %d/%d".format(d.dayNumber, d.totalDays ?: 21))
+                      v.setTextViewText(R.id.tb_incub_species, (d.species ?: "TerraBreed").replaceFirstChar { it.uppercase() })
+                      v.setTextViewText(R.id.tb_incub_sensor,
+                          (d.temperature?.let { "%.1f\u00B0C".format(it) } ?: "--\u00B0C") +
+                          "  " + (d.humidity?.let { "%.0f%%".format(it) } ?: "--%"))
+                  } else {
+                      v.setTextViewText(R.id.tb_incub_day,    "Tidak ada sesi")
+                      v.setTextViewText(R.id.tb_incub_species, "TerraBreed")
+                      v.setTextViewText(R.id.tb_incub_sensor, "")
+                  }
+                  mgr.updateAppWidget(id, v)
+              } finally { p.finish() } }.start()
           }
       }
-  }
-  `;
-  }
+  }`; }
 
-  // ── Manifest helpers ──────────────────────────────────────────────────────────
+  function ktAi(pkg) { return `package ${pkg}
+  import android.app.PendingIntent; import android.appwidget.AppWidgetManager
+  import android.appwidget.AppWidgetProvider; import android.content.Context
+  import android.content.Intent; import android.net.Uri; import android.widget.RemoteViews
+
+  class TbAiWidgetProvider : AppWidgetProvider() {
+      override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+          for (id in ids) {
+              val v = RemoteViews(ctx.packageName, R.layout.tb_widget_ai)
+              val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+
+              // Tap teks -> buka tab AI (chat)
+              val chatPi = PendingIntent.getActivity(ctx, 2001,
+                  Intent(Intent.ACTION_VIEW, Uri.parse("mobile:///ai")).apply {
+                      setPackage(ctx.packageName)
+                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                  }, flags)
+              v.setOnClickPendingIntent(R.id.tb_ai_input, chatPi)
+
+              // Tap mic -> buka tab AI (voice call, auto-start)
+              val voicePi = PendingIntent.getActivity(ctx, 2002,
+                  Intent(Intent.ACTION_VIEW, Uri.parse("mobile:///ai?voice=1")).apply {
+                      setPackage(ctx.packageName)
+                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                  }, flags)
+              v.setOnClickPendingIntent(R.id.tb_ai_mic, voicePi)
+
+              mgr.updateAppWidget(id, v)
+          }
+      }
+  }`; }
+
+  // ── Manifest helper ───────────────────────────────────────────────────────────
   function addReceiver(app, name, infoRes) {
     if (!app.receiver) app.receiver = [];
     if (app.receiver.some(r => r.$?.['android:name'] === name)) return;
     app.receiver.push({
       $: { 'android:name': name, 'android:exported': 'true' },
       'intent-filter': [{ action: [{ $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } }] }],
-      'meta-data': [{ $: { 'android:name': 'android.appwidget.provider', 'android:resource': `@xml/${infoRes}` } }],
+      'meta-data':     [{ $: { 'android:name': 'android.appwidget.provider', 'android:resource': `@xml/${infoRes}` } }],
     });
   }
 
@@ -387,20 +396,29 @@
       const root   = cfg.modRequest.platformProjectRoot;
       const pkg    = cfg.android?.package || 'com.example.app';
       const pkgDir = pkg.replace(/\./g, '/');
-      const resDir = path.join(root, 'app', 'src', 'main', 'res');
-      const srcDir = path.join(root, 'app', 'src', 'main', 'java', pkgDir);
+      const res    = path.join(root, 'app/src/main/res');
+      const src    = path.join(root, 'app/src/main/java', pkgDir);
 
-      writeFile(path.join(resDir, 'drawable', 'tb_widget_bg.xml'),            makeWidgetBg());
-      writeFile(path.join(resDir, 'layout',   'tb_widget_temperature.xml'),   makeTemperatureLayout());
-      writeFile(path.join(resDir, 'layout',   'tb_widget_humidity.xml'),      makeHumidityLayout());
-      writeFile(path.join(resDir, 'layout',   'tb_widget_incubation.xml'),    makeIncubationLayout());
-      writeFile(path.join(resDir, 'xml',      'tb_info_temperature.xml'),     makeWidgetInfo('tb_widget_temperature', 180, 110, 4, 2));
-      writeFile(path.join(resDir, 'xml',      'tb_info_humidity.xml'),        makeWidgetInfo('tb_widget_humidity',    180, 110, 4, 2));
-      writeFile(path.join(resDir, 'xml',      'tb_info_incubation.xml'),      makeWidgetInfo('tb_widget_incubation',  250, 80,  5, 2));
-      writeFile(path.join(srcDir, 'TbWidgetApi.kt'),           makeKotlinHelper(pkg, serverUrl));
-      writeFile(path.join(srcDir, 'TbTempWidgetProvider.kt'),  makeTempProvider(pkg));
-      writeFile(path.join(srcDir, 'TbHumidWidgetProvider.kt'), makeHumidProvider(pkg));
-      writeFile(path.join(srcDir, 'TbIncubWidgetProvider.kt'), makeIncubProvider(pkg));
+      // Drawables
+      writeFile(path.join(res, 'drawable', 'tb_widget_bg.xml'),    TB_WIDGET_BG);
+      writeFile(path.join(res, 'drawable', 'tb_ai_input_bg.xml'),  TB_AI_INPUT_BG);
+      writeFile(path.join(res, 'drawable', 'tb_mic_btn_bg.xml'),   TB_MIC_BTN_BG);
+      // Layouts
+      writeFile(path.join(res, 'layout', 'tb_widget_temperature.xml'), layoutTemperature());
+      writeFile(path.join(res, 'layout', 'tb_widget_humidity.xml'),    layoutHumidity());
+      writeFile(path.join(res, 'layout', 'tb_widget_incubation.xml'),  layoutIncubation());
+      writeFile(path.join(res, 'layout', 'tb_widget_ai.xml'),          layoutAi());
+      // AppWidget info
+      writeFile(path.join(res, 'xml', 'tb_info_temperature.xml'), widgetInfo('tb_widget_temperature', 180, 110, 4, 2));
+      writeFile(path.join(res, 'xml', 'tb_info_humidity.xml'),    widgetInfo('tb_widget_humidity',    180, 110, 4, 2));
+      writeFile(path.join(res, 'xml', 'tb_info_incubation.xml'),  widgetInfo('tb_widget_incubation',  250,  80, 5, 2));
+      writeFile(path.join(res, 'xml', 'tb_info_ai.xml'),          widgetInfo('tb_widget_ai',          250,  80, 5, 2));
+      // Kotlin sources
+      writeFile(path.join(src, 'TbWidgetApi.kt'),           ktApi(pkg, serverUrl));
+      writeFile(path.join(src, 'TbTempWidgetProvider.kt'),  ktTemp(pkg));
+      writeFile(path.join(src, 'TbHumidWidgetProvider.kt'), ktHumid(pkg));
+      writeFile(path.join(src, 'TbIncubWidgetProvider.kt'), ktIncub(pkg));
+      writeFile(path.join(src, 'TbAiWidgetProvider.kt'),    ktAi(pkg));
       return cfg;
     }]);
 
@@ -410,6 +428,7 @@
       addReceiver(app, pkg + '.TbTempWidgetProvider',  'tb_info_temperature');
       addReceiver(app, pkg + '.TbHumidWidgetProvider', 'tb_info_humidity');
       addReceiver(app, pkg + '.TbIncubWidgetProvider', 'tb_info_incubation');
+      addReceiver(app, pkg + '.TbAiWidgetProvider',    'tb_info_ai');
       return cfg;
     });
 
