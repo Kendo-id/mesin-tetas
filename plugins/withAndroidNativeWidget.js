@@ -124,11 +124,11 @@
               android:letterSpacing="0.08"/>
       </LinearLayout>
 
-      <!-- Input row: text area + mic button -->
+      <!-- Input row: text placeholder + mic button -->
       <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
           android:orientation="horizontal" android:gravity="center_vertical">
 
-          <!-- Text input placeholder — klik buka AI chat -->
+          <!-- Tap -> buka AI chat -->
           <TextView android:id="@+id/tb_ai_input"
               android:layout_width="0dp" android:layout_height="match_parent"
               android:layout_weight="1"
@@ -139,7 +139,7 @@
               android:gravity="center_vertical"
               android:layout_marginEnd="8dp"/>
 
-          <!-- Mic button — klik buka AI voice call -->
+          <!-- Tap -> buka AI voice call -->
           <TextView android:id="@+id/tb_ai_mic"
               android:layout_width="44dp" android:layout_height="44dp"
               android:background="@drawable/tb_mic_btn_bg"
@@ -168,6 +168,8 @@
   }
 
   // ── Kotlin: TbWidgetApi ───────────────────────────────────────────────────────
+  // PENTING: gunakan block body { return ... } bukan expression body = ...,
+  //          karena expression body di Kotlin tidak membolehkan keyword 'return'.
   function ktApi(pkg, serverUrl) { return `package ${pkg}
 
   import android.content.Context
@@ -198,9 +200,10 @@
       private val allVerifier = HostnameVerifier { _, _ -> true }
 
       private fun readUrlFromAsyncStorage(ctx: Context): String? {
-          val dbDir  = File(ctx.applicationInfo.dataDir, "databases")
+          val dbDir = File(ctx.applicationInfo.dataDir, "databases")
           for (name in listOf("AsyncStorage", "RKStorage", "default", "asyncstorage")) {
-              val f = File(dbDir, name); if (!f.exists()) continue
+              val f = File(dbDir, name)
+              if (!f.exists()) continue
               try {
                   SQLiteDatabase.openDatabase(f.path, null,
                       SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS).use { db ->
@@ -236,51 +239,67 @@
       private fun JSONObject.getTemp(): Double? {
           for (k in listOf("temp", "temperature", "suhu")) {
               if (has(k)) { val v = optDouble(k); if (!v.isNaN()) return v }
-          }; return null
+          }
+          return null
       }
       private fun JSONObject.getHumid(): Double? {
           for (k in listOf("humidity", "lembab", "humid")) {
               if (has(k)) { val v = optDouble(k); if (!v.isNaN()) return v }
-          }; return null
+          }
+          return null
       }
 
       private fun openConn(url: String, ms: Int = 8000): HttpURLConnection {
           val c = URL(url).openConnection() as HttpURLConnection
           c.connectTimeout = ms; c.readTimeout = ms
-          c.requestMethod = "GET"; c.setRequestProperty("Accept", "application/json")
-          if (c is HttpsURLConnection) { c.sslSocketFactory = sslCtx.socketFactory; c.hostnameVerifier = allVerifier }
+          c.requestMethod = "GET"
+          c.setRequestProperty("Accept", "application/json")
+          if (c is HttpsURLConnection) {
+              c.sslSocketFactory = sslCtx.socketFactory
+              c.hostnameVerifier = allVerifier
+          }
           return c
       }
 
-      fun fetchSensor(ctx: Context): SensorData? = try {
-          val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest")
-          if (c.responseCode != 200) { c.disconnect(); null }
-          else {
-              val root = JSONObject(InputStreamReader(c.inputStream).readText().also { c.disconnect() })
-              val obj  = root.optJSONObject("sensor") ?: root.optJSONObject("data") ?: root
-              SensorData(obj.getTemp(), obj.getHumid())
-          }
-      } catch (_: Exception) { null }
+      fun fetchSensor(ctx: Context): SensorData? {
+          return try {
+              val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest")
+              if (c.responseCode != 200) { c.disconnect(); null }
+              else {
+                  val root = JSONObject(InputStreamReader(c.inputStream).readText().also { c.disconnect() })
+                  val obj  = root.optJSONObject("sensor") ?: root.optJSONObject("data") ?: root
+                  SensorData(obj.getTemp(), obj.getHumid())
+              }
+          } catch (_: Exception) { null }
+      }
 
-      fun fetchIncubation(ctx: Context): IncubationData? = try {
-          val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/incubation/current")
-          if (c.responseCode != 200) { c.disconnect(); null }
-          else {
-              val body = InputStreamReader(c.inputStream).readText().also { c.disconnect() }
-              val root = JSONObject(body)
-              // Response bisa flat {active, elapsed_days,...} atau {session:{...}}
-              val obj  = if (root.has("active")) root else (root.optJSONObject("session") ?: root)
-              if (!obj.optBoolean("active", false)) return null
-              val sensor = fetchSensor(ctx)
-              IncubationData(
-                  dayNumber   = obj.optInt("elapsed_days").takeIf  { obj.has("elapsed_days") },
-                  totalDays   = obj.optInt("total_days").takeIf    { obj.has("total_days")   },
-                  species     = obj.optString("species").takeIf    { it.isNotBlank() } ?: "TerraBreed",
-                  temperature = sensor?.temperature,
-                  humidity    = sensor?.humidity
-              )
-          }
-      } catch (_: Exception) { null }
+      // Gunakan block body agar 'return null' valid di dalam if-expression
+      fun fetchIncubation(ctx: Context): IncubationData? {
+          return try {
+              val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/incubation/current")
+              if (c.responseCode != 200) {
+                  c.disconnect()
+                  null
+              } else {
+                  val body = InputStreamReader(c.inputStream).readText().also { c.disconnect() }
+                  val root = JSONObject(body)
+                  // Response bisa flat {active, elapsed_days,...} atau wrapped {session:{...}}
+                  val obj  = if (root.has("active")) root else (root.optJSONObject("session") ?: root)
+                  if (!obj.optBoolean("active", false)) {
+                      null
+                  } else {
+                      val sensor = fetchSensor(ctx)
+                      IncubationData(
+                          dayNumber   = if (obj.has("elapsed_days")) obj.optInt("elapsed_days") else null,
+                          totalDays   = if (obj.has("total_days"))   obj.optInt("total_days")   else null,
+                          species     = obj.optString("species").takeIf { it.isNotBlank() } ?: "TerraBreed",
+                          temperature = sensor?.temperature,
+                          humidity    = sensor?.humidity
+                      )
+                  }
+              }
+          } catch (_: Exception) { null }
+      }
   }
   `; }
 
@@ -328,7 +347,7 @@
               val p = goAsync(); val v = RemoteViews(ctx.packageName, R.layout.tb_widget_incubation)
               Thread { try {
                   val d = TbWidgetApi.fetchIncubation(ctx)
-                  if (d?.dayNumber != null) {
+                  if (d != null && d.dayNumber != null) {
                       v.setTextViewText(R.id.tb_incub_day,     "Hari %d/%d".format(d.dayNumber, d.totalDays ?: 21))
                       v.setTextViewText(R.id.tb_incub_species, (d.species ?: "TerraBreed").replaceFirstChar { it.uppercase() })
                       v.setTextViewText(R.id.tb_incub_sensor,
@@ -346,31 +365,35 @@
   }`; }
 
   function ktAi(pkg) { return `package ${pkg}
-  import android.app.PendingIntent; import android.appwidget.AppWidgetManager
-  import android.appwidget.AppWidgetProvider; import android.content.Context
-  import android.content.Intent; import android.net.Uri; import android.widget.RemoteViews
+  import android.app.PendingIntent
+  import android.appwidget.AppWidgetManager
+  import android.appwidget.AppWidgetProvider
+  import android.content.Context
+  import android.content.Intent
+  import android.net.Uri
+  import android.widget.RemoteViews
 
   class TbAiWidgetProvider : AppWidgetProvider() {
       override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+          val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
           for (id in ids) {
               val v = RemoteViews(ctx.packageName, R.layout.tb_widget_ai)
-              val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
               // Tap teks -> buka tab AI (chat)
-              val chatPi = PendingIntent.getActivity(ctx, 2001,
-                  Intent(Intent.ACTION_VIEW, Uri.parse("mobile:///ai")).apply {
-                      setPackage(ctx.packageName)
-                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                  }, flags)
-              v.setOnClickPendingIntent(R.id.tb_ai_input, chatPi)
+              val chatIntent = Intent(Intent.ACTION_VIEW, Uri.parse("mobile:///ai")).apply {
+                  setPackage(ctx.packageName)
+                  addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+              }
+              v.setOnClickPendingIntent(R.id.tb_ai_input,
+                  PendingIntent.getActivity(ctx, 2001, chatIntent, flags))
 
               // Tap mic -> buka tab AI (voice call, auto-start)
-              val voicePi = PendingIntent.getActivity(ctx, 2002,
-                  Intent(Intent.ACTION_VIEW, Uri.parse("mobile:///ai?voice=1")).apply {
-                      setPackage(ctx.packageName)
-                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                  }, flags)
-              v.setOnClickPendingIntent(R.id.tb_ai_mic, voicePi)
+              val voiceIntent = Intent(Intent.ACTION_VIEW, Uri.parse("mobile:///ai?voice=1")).apply {
+                  setPackage(ctx.packageName)
+                  addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+              }
+              v.setOnClickPendingIntent(R.id.tb_ai_mic,
+                  PendingIntent.getActivity(ctx, 2002, voiceIntent, flags))
 
               mgr.updateAppWidget(id, v)
           }
