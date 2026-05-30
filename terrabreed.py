@@ -26,6 +26,15 @@ import os
 import sqlite3
 import threading
 import time
+
+# ─── TTS preprocessing (tts_utils) ───
+try:
+    from tts_utils import preprocess_tts, init_db as init_tts_db
+    _TTS_UTILS_OK = True
+except ImportError:
+    _TTS_UTILS_OK = False
+    def preprocess_tts(t): return t  # fallback: passthrough
+    def init_tts_db(): pass
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -852,6 +861,7 @@ def create_terrabreed_blueprint(groq_client):
     socketio = SocketIO()   # akan di-init ulang dengan app nanti
 
     init_tb_db()
+    init_tts_db()  # inisialisasi DB rules TTS
 
     # ─── CORS: tambahkan header ke semua response blueprint ───
     @tb_bp.after_request
@@ -1213,6 +1223,11 @@ def create_terrabreed_blueprint(groq_client):
         if not text:
             return jsonify({"error": "text kosong"}), 400
 
+        # Preprocessing: konversi angka, simbol, singkatan ke ucapan natural
+        if _TTS_UTILS_OK:
+            text = preprocess_tts(text)
+            logger.debug(f"[TerraBreed TTS] preprocessed: {text[:80]}")
+
         # Jalankan edge-tts di subprocess Python terpisah agar tidak terkena
         # monkey-patch eventlet (yang meng-patch socket di level OS sejak import).
         # Subprocess baru = proses bersih tanpa patch apapun.
@@ -1450,7 +1465,22 @@ def create_terrabreed_blueprint(groq_client):
         result = tb_ai_diagnose(groq_client)   # blocking — tapi Socket.IO menjalankan ini di thread/greenlet terpisah
         sio_emit('tb_diagnose_reply', result)
 
-    return tb_bp, socketio
+
+
+    # ─── Register TTS admin blueprint (/tts-settings) ───
+    if _TTS_UTILS_OK:
+        try:
+            from tts_admin import tts_bp as _tts_admin_bp
+            @tb_bp.record_once
+            def _register_tts_admin(state):
+                try:
+                    state.app.register_blueprint(_tts_admin_bp)
+                    logger.info("[TerraBreed] TTS admin UI tersedia di /tts-settings")
+                except Exception as _e:
+                    logger.warning(f"[TerraBreed] Gagal register tts_admin: {_e}")
+        except ImportError:
+            logger.info("[TerraBreed] tts_admin.py tidak ditemukan, halaman /tts-settings dinonaktifkan")
+
 
 
 # ══════════════════════════════════════════════════════════
