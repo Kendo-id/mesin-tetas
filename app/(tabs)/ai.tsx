@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Tabs, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
@@ -86,6 +86,8 @@ export default function AIScreen() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, Feedback>>({});
   const [ttsError, setTtsError] = useState<string | null>(null);
+    // Baca parameter dari deep link widget
+    const params = useLocalSearchParams<{ voice?: string }>();
 
   const ttsEnabledRef = useRef(false);
   const isCallRef = useRef(false);
@@ -394,7 +396,14 @@ export default function AIScreen() {
       if (recordingRef.current) recordingRef.current.stopAndUnloadAsync().catch(() => {});
       stopTTS().catch(() => {});
     };
-  }, []);
+  }, [])
+
+  // Auto-avvia voice call se aperto dal widget con ?voice=1
+  useEffect(() => {
+    if (params.voice !== '1') return;
+    const t = setTimeout(() => { toggleCall(); }, 800);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps;
 
   const C = colors;
   const A = "#d97706"; const A2 = "#f59e0b";
