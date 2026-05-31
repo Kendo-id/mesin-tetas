@@ -91,8 +91,9 @@ function layoutSensor() {
                 android:text="--&#176;C" android:textColor="#F59E0B"
                 android:textSize="22sp" android:textStyle="bold"/>
         </LinearLayout>
-        <View android:layout_width="1dp" android:layout_height="32dp"
-            android:background="#1E293B" android:layout_marginEnd="10dp"/>
+        <TextView android:layout_width="1dp" android:layout_height="32dp"
+            android:background="#1E293B" android:layout_marginEnd="10dp"
+            android:text=""/>
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1" android:orientation="vertical">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
