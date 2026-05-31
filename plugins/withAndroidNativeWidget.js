@@ -42,6 +42,20 @@ const TB_MODE_BADGE = `<?xml version="1.0" encoding="utf-8"?>
     <stroke android:width="1dp" android:color="#374151"/>
 </shape>`;
 
+
+const TB_IC_MIC = `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- batang mic -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M12,1C10.343,1 9,2.343 9,4L9,12C9,13.657 10.343,15 12,15C13.657,15 15,13.657 15,12L15,4C15,2.343 13.657,1 12,1Z"/>
+    <!-- lengkungan bawah -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M17,12C17,14.761 14.761,17 12,17C9.239,17 7,14.761 7,12L5,12C5,15.634 7.507,18.685 11,19.341L11,22L13,22L13,19.341C16.493,18.685 19,15.634 19,12L17,12Z"/>
+</vector>`;
+
 const TB_CHART_TEMP = `<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
@@ -307,20 +321,15 @@ function layoutAi() {
             android:singleLine="true"/>
     </LinearLayout>
 
-    <!-- Mic button: tap -> Voice Call, background sama dengan input bar -->
-    <LinearLayout android:id="@+id/tb_ai_mic"
+    <!-- Mic button: tap -> Voice Call -->
+    <FrameLayout android:id="@+id/tb_ai_mic"
         android:layout_width="42dp" android:layout_height="42dp"
-        android:background="@drawable/tb_mic_btn_bg"
-        android:gravity="center"
-        android:orientation="vertical">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="&#9679;" android:textColor="#94A3B8" android:textSize="8sp"
-            android:gravity="center"/>
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="MIC" android:textColor="#E2E8F0" android:textSize="8sp"
-            android:textStyle="bold" android:gravity="center"
-            android:letterSpacing="0.05"/>
-    </LinearLayout>
+        android:background="@drawable/tb_mic_btn_bg">
+        <ImageView
+            android:layout_width="22dp" android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:src="@drawable/tb_ic_mic"/>
+    </FrameLayout>
 </LinearLayout>`;
 }
 
@@ -662,6 +671,7 @@ const withAndroidNativeWidget = (config, options = {}) => {
     writeFile(path.join(res, 'drawable', 'tb_widget_bg.xml'),    TB_WIDGET_BG);
     writeFile(path.join(res, 'drawable', 'tb_ai_input_bg.xml'),  TB_AI_INPUT_BG);
     writeFile(path.join(res, 'drawable', 'tb_mic_btn_bg.xml'),   TB_MIC_BTN_BG);
+    writeFile(path.join(res, 'drawable', 'tb_ic_mic.xml'),       TB_IC_MIC);
     writeFile(path.join(res, 'drawable', 'tb_chart_temp.xml'),   TB_CHART_TEMP);
     writeFile(path.join(res, 'drawable', 'tb_chart_humid.xml'),  TB_CHART_HUMID);
 
