@@ -35,6 +35,13 @@ const TB_MIC_BTN_BG = `<?xml version="1.0" encoding="utf-8"?>
     <stroke android:width="1dp" android:color="#334155"/>
 </shape>`;
 
+const TB_MODE_BADGE = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#1F2937"/>
+    <corners android:radius="4dp"/>
+    <stroke android:width="1dp" android:color="#374151"/>
+</shape>`;
+
 const TB_CHART_TEMP = `<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
@@ -172,6 +179,104 @@ function layoutIncubation() {
         android:layout_marginTop="2dp"/>
 </LinearLayout>`;
 }
+
+function layoutStatus() {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/tb_widget_bg"
+    android:paddingStart="14dp" android:paddingEnd="14dp"
+    android:paddingTop="10dp" android:paddingBottom="10dp"
+    android:gravity="center_vertical">
+
+    <!-- Header: label + mode badge -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="STATUS MESIN" android:textColor="#64748B"
+            android:textSize="9sp" android:letterSpacing="0.08"/>
+        <TextView android:id="@+id/tb_status_mode"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="--" android:textColor="#F59E0B"
+            android:textSize="9sp" android:textStyle="bold"
+            android:paddingStart="6dp" android:paddingEnd="6dp"
+            android:paddingTop="2dp" android:paddingBottom="2dp"
+            android:background="@drawable/tb_mode_badge"/>
+    </LinearLayout>
+
+    <!-- Target suhu & humid -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+        <TextView android:id="@+id/tb_status_target_temp"
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Target: --&#176;C" android:textColor="#94A3B8"
+            android:textSize="11sp"/>
+        <TextView android:id="@+id/tb_status_target_humid"
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Lembap: --%"
+            android:textColor="#94A3B8" android:textSize="11sp"/>
+    </LinearLayout>
+
+    <!-- Row aktuator: Heater | Fan | Humidifier -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <!-- Heater -->
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="HEATER" android:textColor="#64748B" android:textSize="8sp"
+                android:gravity="center" android:letterSpacing="0.05"/>
+            <TextView android:id="@+id/tb_status_heater"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="--" android:textSize="11sp" android:textStyle="bold"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <!-- Separator -->
+        <TextView android:layout_width="1dp" android:layout_height="28dp"
+            android:background="#1E293B" android:text=""/>
+
+        <!-- Fan -->
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="KIPAS" android:textColor="#64748B" android:textSize="8sp"
+                android:gravity="center" android:letterSpacing="0.05"/>
+            <TextView android:id="@+id/tb_status_fan"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="--" android:textSize="11sp" android:textStyle="bold"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <!-- Separator -->
+        <TextView android:layout_width="1dp" android:layout_height="28dp"
+            android:background="#1E293B" android:text=""/>
+
+        <!-- Humidifier -->
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="HUMID" android:textColor="#64748B" android:textSize="8sp"
+                android:gravity="center" android:letterSpacing="0.05"/>
+            <TextView android:id="@+id/tb_status_humid_act"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="--" android:textSize="11sp" android:textStyle="bold"
+                android:gravity="center"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="TerraBreed" android:textColor="#334155" android:textSize="8sp"
+        android:layout_marginTop="4dp"/>
+</LinearLayout>`;
+}
+
 
 function layoutAi() {
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -346,6 +451,34 @@ object TbWidgetApi {
         } catch (_: Exception) { null }
     }
 
+    data class StatusData(
+        val autoMode: Boolean?,
+        val heater: Boolean?,
+        val humidifier: Boolean?,
+        val fan: Boolean?,
+        val targetTemp: Double?,
+        val targetHumid: Double?
+    )
+
+    fun fetchStatus(ctx: Context): StatusData? {
+        return try {
+            val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/sensor/latest")
+            if (c.responseCode != 200) { c.disconnect(); null }
+            else {
+                val root = org.json.JSONObject(java.io.InputStreamReader(c.inputStream).readText().also { c.disconnect() })
+                val st   = root.optJSONObject("status") ?: return null
+                StatusData(
+                    autoMode    = if (st.has("auto_mode")) st.optBoolean("auto_mode") else null,
+                    heater      = if (st.has("heater"))    st.optInt("heater") == 1   else null,
+                    humidifier  = if (st.has("humidifier"))st.optInt("humidifier") == 1 else null,
+                    fan         = if (st.has("fan"))       st.optInt("fan") == 1      else null,
+                    targetTemp  = if (st.has("target_temp"))  st.optDouble("target_temp").takeIf { !it.isNaN() }  else null,
+                    targetHumid = if (st.has("target_humid")) st.optDouble("target_humid").takeIf { !it.isNaN() } else null
+                )
+            }
+        } catch (_: Exception) { null }
+    }
+
     fun fetchIncubation(ctx: Context): IncubationData? {
         return try {
             val c = openConn(getServerUrl(ctx).trimEnd('/') + "/api/incubation/current")
@@ -420,6 +553,49 @@ class TbIncubWidgetProvider : AppWidgetProvider() {
         }
     }
 }`; }
+function ktStatus(pkg) { return `package ${pkg}
+import android.appwidget.AppWidgetManager; import android.appwidget.AppWidgetProvider
+import android.content.Context; import android.widget.RemoteViews
+class TbStatusWidgetProvider : AppWidgetProvider() {
+    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+        for (id in ids) {
+            val p = goAsync(); val v = RemoteViews(ctx.packageName, R.layout.tb_widget_status)
+            Thread { try {
+                val d = TbWidgetApi.fetchSensor(ctx)
+                // fetchSensor juga kembalikan status via /api/sensor/latest
+                // Panggil endpoint langsung untuk status
+                val st = TbWidgetApi.fetchStatus(ctx)
+                // Mode
+                val modeStr = when {
+                    st?.autoMode == true -> "AUTO"
+                    st?.autoMode == false -> "MANUAL"
+                    else -> "--"
+                }
+                v.setTextViewText(R.id.tb_status_mode, modeStr)
+                // Target
+                v.setTextViewText(R.id.tb_status_target_temp,
+                    st?.targetTemp?.let { "Target: %.1f°C".format(it) } ?: "Target: --°C")
+                v.setTextViewText(R.id.tb_status_target_humid,
+                    st?.targetHumid?.let { "Lembap: %.0f%%".format(it) } ?: "Lembap: --%")
+                // Aktuator
+                fun actText(on: Boolean?) = if (on == true) "ON" else if (on == false) "OFF" else "--"
+                fun actColor(on: Boolean?) = if (on == true) 0xFF22C55E.toInt() else if (on == false) 0xFF64748B.toInt() else 0xFF475569.toInt()
+                v.setTextViewText(R.id.tb_status_heater,    actText(st?.heater))
+                v.setTextViewText(R.id.tb_status_fan,       actText(st?.fan))
+                v.setTextViewText(R.id.tb_status_humid_act, actText(st?.humidifier))
+                v.setTextColor(R.id.tb_status_heater,    actColor(st?.heater))
+                v.setTextColor(R.id.tb_status_fan,       actColor(st?.fan))
+                v.setTextColor(R.id.tb_status_humid_act, actColor(st?.humidifier))
+                // Mode badge color
+                v.setTextColor(R.id.tb_status_mode,
+                    if (modeStr == "AUTO") 0xFF22C55E.toInt() else 0xFFF59E0B.toInt())
+                mgr.updateAppWidget(id, v)
+            } finally { p.finish() } }.start()
+        }
+    }
+}`; }
+
+
 
 // FIX KRITIS: CLEAR_TOP + NEW_TASK agar deep-link diproses ulang
 // meski Activity sudah berjalan. SINGLE_TOP sebelumnya membuat Android
@@ -499,11 +675,21 @@ const withAndroidNativeWidget = (config, options = {}) => {
     writeFile(path.join(res, 'xml', 'tb_info_incubation.xml'), widgetInfoHV('tb_widget_incubation', 250,  80, 5, 2));
     writeFile(path.join(res, 'xml', 'tb_info_ai.xml'),         widgetInfoH ('tb_widget_ai',         250,  62, 5, 1));
 
+    // Drawables tambahan
+    writeFile(path.join(res, 'drawable', 'tb_mode_badge.xml'),   TB_MODE_BADGE);
+
+    // Layouts tambahan
+    writeFile(path.join(res, 'layout', 'tb_widget_status.xml'),     layoutStatus());
+
+    // AppWidget info tambahan
+    writeFile(path.join(res, 'xml', 'tb_info_status.xml'),     widgetInfoHV('tb_widget_status',     220, 110, 4, 2));
+
     // Kotlin
     writeFile(path.join(src, 'TbWidgetApi.kt'),             ktApi(pkg, serverUrl));
     writeFile(path.join(src, 'TbSensorWidgetProvider.kt'),  ktSensor(pkg));
     writeFile(path.join(src, 'TbIncubWidgetProvider.kt'),   ktIncub(pkg));
     writeFile(path.join(src, 'TbAiWidgetProvider.kt'),      ktAi(pkg));
+    writeFile(path.join(src, 'TbStatusWidgetProvider.kt'),  ktStatus(pkg));
 
     return cfg;
   }]);
@@ -514,6 +700,7 @@ const withAndroidNativeWidget = (config, options = {}) => {
     addReceiver(app, pkg + '.TbSensorWidgetProvider',  'tb_info_sensor');
     addReceiver(app, pkg + '.TbIncubWidgetProvider',   'tb_info_incubation');
     addReceiver(app, pkg + '.TbAiWidgetProvider',      'tb_info_ai');
+    addReceiver(app, pkg + '.TbStatusWidgetProvider',  'tb_info_status');
     return cfg;
   });
 
