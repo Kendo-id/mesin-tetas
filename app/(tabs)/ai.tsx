@@ -212,7 +212,7 @@ export default function AIScreen() {
       const res = await fetch(apiRef.current.tts, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: "su-ID-TutiNeural" }),
+        body: JSON.stringify({ text }),
         signal: ctrl.signal,
       });
       clearTimeout(timer);
