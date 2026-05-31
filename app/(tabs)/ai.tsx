@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Linking } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useIncubator } from "@/context/IncubatorContext";
@@ -398,12 +399,28 @@ export default function AIScreen() {
     };
   }, [])
 
-  // Auto-avvia voice call se aperto dal widget con ?voice=1
+  // Handle deep link dari widget — bereaksi setiap kali URL masuk
+  // Ini fix untuk kasus app sudah buka: CLEAR_TOP mengirim Intent baru
+  // tapi useEffect([]) tidak jalan ulang. Harus pakai Linking listener.
   useEffect(() => {
-    if (params.voice !== '1') return;
-    const t = setTimeout(() => { toggleCall(); }, 800);
-    return () => clearTimeout(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps;
+    // Handler untuk URL yang masuk saat app sudah aktif (onNewIntent)
+    const handleUrl = ({ url }: { url: string }) => {
+      if (url.includes('voice=1') && !isCallRef.current) {
+        setTimeout(() => toggleCall(), 300);
+      }
+    };
+
+    // Cek URL yang sudah ada saat komponen mount (cold start dari widget)
+    Linking.getInitialURL().then(url => {
+      if (url && url.includes('voice=1') && !isCallRef.current) {
+        setTimeout(() => toggleCall(), 800);
+      }
+    }).catch(() => {});
+
+    // Listen URL baru saat app sudah jalan (warm start / onNewIntent)
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const C = colors;
   const A = "#d97706"; const A2 = "#f59e0b";
