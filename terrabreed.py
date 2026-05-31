@@ -1480,6 +1480,7 @@ def create_terrabreed_blueprint(groq_client):
                     logger.warning(f"[TerraBreed] Gagal register tts_admin: {_e}")
         except ImportError:
             logger.info("[TerraBreed] tts_admin.py tidak ditemukan, halaman /tts-settings dinonaktifkan")
+    return tb_bp, socketio
 
 
 
