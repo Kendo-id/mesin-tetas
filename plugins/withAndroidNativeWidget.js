@@ -29,8 +29,10 @@ const TB_AI_INPUT_BG = `<?xml version="1.0" encoding="utf-8"?>
 </shape>`;
 
 const TB_MIC_BTN_BG = `<?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="#F59E0B"/>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FF1E293B"/>
+    <corners android:radius="21dp"/>
+    <stroke android:width="1dp" android:color="#334155"/>
 </shape>`;
 
 const TB_CHART_TEMP = `<?xml version="1.0" encoding="utf-8"?>
@@ -176,18 +178,19 @@ function layoutAi() {
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="@drawable/tb_widget_bg"
-    android:paddingStart="10dp" android:paddingEnd="10dp"
-    android:paddingTop="10dp" android:paddingBottom="10dp"
+    android:background="@android:color/transparent"
+    android:paddingStart="0dp" android:paddingEnd="0dp"
+    android:paddingTop="8dp" android:paddingBottom="8dp"
     android:gravity="center_vertical">
 
+    <!-- Input bar: tap -> AI Chat -->
     <LinearLayout android:id="@+id/tb_ai_input"
         android:layout_width="0dp" android:layout_height="42dp"
         android:layout_weight="1"
         android:background="@drawable/tb_ai_input_bg"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="12dp" android:paddingEnd="8dp"
+        android:paddingStart="14dp" android:paddingEnd="8dp"
         android:layout_marginEnd="8dp">
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="&#10024;" android:textColor="#F59E0B" android:textSize="12sp"
@@ -199,12 +202,20 @@ function layoutAi() {
             android:singleLine="true"/>
     </LinearLayout>
 
-    <TextView android:id="@+id/tb_ai_mic"
+    <!-- Mic button: tap -> Voice Call, background sama dengan input bar -->
+    <LinearLayout android:id="@+id/tb_ai_mic"
         android:layout_width="42dp" android:layout_height="42dp"
         android:background="@drawable/tb_mic_btn_bg"
-        android:text="&#127908;"
-        android:textSize="18sp"
-        android:gravity="center"/>
+        android:gravity="center"
+        android:orientation="vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="&#9679;" android:textColor="#94A3B8" android:textSize="8sp"
+            android:gravity="center"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="MIC" android:textColor="#E2E8F0" android:textSize="8sp"
+            android:textStyle="bold" android:gravity="center"
+            android:letterSpacing="0.05"/>
+    </LinearLayout>
 </LinearLayout>`;
 }
 
