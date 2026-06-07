@@ -414,9 +414,14 @@ object TbWidgetApi {
     }
 
     fun getServerUrl(ctx: Context): String {
-        return runCatching { readUrlFromAsyncStorage(ctx) }.getOrNull()?.takeIf { it.isNotBlank() }
+        val raw = runCatching { readUrlFromAsyncStorage(ctx) }.getOrNull()?.takeIf { it.isNotBlank() }
             ?: ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_URL, DEFAULT_URL)
             ?: DEFAULT_URL
+        // Pastikan URL selalu berakhir dengan /terrabreed
+        // Jika app simpan base URL (misal https://kendo-assistant.com),
+        // widget otomatis tambah /terrabreed
+        return if (raw.trimEnd('/').endsWith("/terrabreed")) raw.trimEnd('/')
+               else raw.trimEnd('/') + "/terrabreed"
     }
 
     data class SensorData(val temperature: Double?, val humidity: Double?)
@@ -475,7 +480,9 @@ object TbWidgetApi {
             if (c.responseCode != 200) { c.disconnect(); null }
             else {
                 val root = org.json.JSONObject(java.io.InputStreamReader(c.inputStream).readText().also { c.disconnect() })
-                val st   = root.optJSONObject("status") ?: return null
+                val st   = root.optJSONObject("status") ?: org.json.JSONObject()
+                // status boleh kosong (ESP32 belum kirim) — tetap return object dengan null fields
+                // agar widget tampil "-- / OFF" bukan blank total
                 StatusData(
                     autoMode    = if (st.has("auto_mode")) st.optBoolean("auto_mode") else null,
                     heater      = if (st.has("heater"))    st.optInt("heater") == 1   else null,
